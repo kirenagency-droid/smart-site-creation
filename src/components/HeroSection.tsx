@@ -32,7 +32,7 @@ const HeroSection = () => {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center gap-4 animate-fade-in" style={{ animationDelay: "0.4s" }}>
-            <a href="#tarifs" className="btn-primary group">
+            <a href="#generator" className="btn-primary group">
               Créer mon site maintenant
               <ArrowRight className="w-5 h-5 ml-2 transition-transform duration-300 group-hover:translate-x-1" />
             </a>

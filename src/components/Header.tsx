@@ -7,6 +7,7 @@ const Header = () => {
   const navLinks = [
     { href: "#fonctionnalites", label: "Fonctionnalités" },
     { href: "#templates", label: "Templates" },
+    { href: "#generator", label: "Essayer" },
     { href: "#tarifs", label: "Tarifs" },
   ];
 
@@ -37,8 +38,8 @@ const Header = () => {
 
           {/* CTA Button */}
           <div className="hidden md:flex items-center gap-4">
-            <a href="#tarifs" className="btn-primary text-sm px-6 py-3">
-              Commencer
+            <a href="#generator" className="btn-primary text-sm px-6 py-3">
+              Essayer gratuitement
             </a>
           </div>
 
@@ -66,8 +67,8 @@ const Header = () => {
                   {link.label}
                 </a>
               ))}
-              <a href="#tarifs" className="btn-primary text-center mt-4" onClick={() => setIsMenuOpen(false)}>
-                Commencer
+              <a href="#generator" className="btn-primary text-center mt-4" onClick={() => setIsMenuOpen(false)}>
+                Essayer gratuitement
               </a>
             </div>
           </div>
