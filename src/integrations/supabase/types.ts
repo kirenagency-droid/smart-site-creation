@@ -41,12 +41,119 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+          plan: string
+          token_balance: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id: string
+          plan?: string
+          token_balance?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          plan?: string
+          token_balance?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      project_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          project_id: string
+          role: string
+          tokens_used: number | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          project_id: string
+          role: string
+          tokens_used?: number | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          project_id?: string
+          role?: string
+          tokens_used?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          business_type: string | null
+          created_at: string
+          current_html: string | null
+          description: string | null
+          id: string
+          name: string
+          site_structure: Json | null
+          theme: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          business_type?: string | null
+          created_at?: string
+          current_html?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          site_structure?: Json | null
+          theme?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          business_type?: string | null
+          created_at?: string
+          current_html?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          site_structure?: Json | null
+          theme?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      deduct_tokens: {
+        Args: { amount: number; user_uuid: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

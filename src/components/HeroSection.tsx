@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { ArrowRight, Sparkles } from "lucide-react";
 
 const HeroSection = () => {
@@ -27,18 +28,23 @@ const HeroSection = () => {
 
           {/* Subtitle */}
           <p className="text-lg md:text-xl text-white/60 max-w-2xl mb-10 animate-fade-in" style={{ animationDelay: "0.3s" }}>
-            Décris ton business en une phrase. SITEFORGE AI génère un site complet, professionnel et optimisé en quelques secondes.
+            Décris ton business en une phrase. Penflow.ai génère un site complet, professionnel et optimisé en quelques secondes.
           </p>
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center gap-4 animate-fade-in" style={{ animationDelay: "0.4s" }}>
-            <a href="#generator" className="btn-primary group">
-              Créer mon site maintenant
+            <Link to="/auth" className="btn-primary group">
+              Commencer gratuitement
               <ArrowRight className="w-5 h-5 ml-2 transition-transform duration-300 group-hover:translate-x-1" />
-            </a>
+            </Link>
             <a href="#comment-ca-marche" className="btn-ghost text-white/70 hover:text-white">
               Voir comment ça marche
             </a>
+          </div>
+
+          {/* Free Tokens Badge */}
+          <div className="mt-6 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 animate-fade-in" style={{ animationDelay: "0.45s" }}>
+            <span className="text-sm text-white/80">🎁 <strong>1000 tokens offerts</strong> à l'inscription</span>
           </div>
 
           {/* Animated Mockup */}
@@ -56,29 +62,40 @@ const HeroSection = () => {
                   <div className="flex-1 mx-4">
                     <div className="flex items-center gap-2 px-4 py-1.5 bg-background rounded-lg border border-border/50 max-w-md mx-auto">
                       <div className="w-4 h-4 rounded bg-primary/20" />
-                      <span className="text-xs text-muted-foreground">mon-site.siteforge.ai</span>
+                      <span className="text-xs text-muted-foreground">mon-site.penflow.ai</span>
                     </div>
                   </div>
                 </div>
                 
-                {/* Content Preview */}
-                <div className="p-8 space-y-6">
-                  {/* Typing Animation Simulation */}
-                  <div className="space-y-3">
-                    <div className="h-8 w-3/4 bg-gradient-to-r from-primary/20 to-transparent rounded-lg animate-shimmer" style={{ backgroundSize: "200% 100%" }} />
-                    <div className="h-4 w-full bg-muted/30 rounded" />
-                    <div className="h-4 w-5/6 bg-muted/20 rounded" />
+                {/* Builder Preview */}
+                <div className="flex h-[300px]">
+                  {/* Chat Panel Mock */}
+                  <div className="w-1/3 border-r border-border/50 p-4 space-y-3">
+                    <div className="h-3 w-3/4 bg-muted/30 rounded" />
+                    <div className="p-3 rounded-xl bg-primary/20">
+                      <div className="h-2 w-full bg-primary/30 rounded" />
+                    </div>
+                    <div className="p-3 rounded-xl bg-secondary/50">
+                      <div className="h-2 w-4/5 bg-muted/30 rounded mb-2" />
+                      <div className="h-2 w-3/5 bg-muted/20 rounded" />
+                    </div>
                   </div>
                   
-                  {/* Cards */}
-                  <div className="grid grid-cols-3 gap-4 mt-8">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="rounded-xl bg-secondary/30 p-4 animate-float" style={{ animationDelay: `${i * 0.2}s` }}>
-                        <div className="w-10 h-10 rounded-lg bg-primary/20 mb-3" />
-                        <div className="h-3 w-2/3 bg-muted/30 rounded mb-2" />
-                        <div className="h-2 w-full bg-muted/20 rounded" />
+                  {/* Preview Panel Mock */}
+                  <div className="flex-1 p-4">
+                    <div className="h-full rounded-xl bg-white/5 p-4 space-y-4">
+                      <div className="h-6 w-1/2 bg-gradient-to-r from-primary/20 to-transparent rounded animate-shimmer" style={{ backgroundSize: "200% 100%" }} />
+                      <div className="h-3 w-full bg-muted/20 rounded" />
+                      <div className="h-3 w-4/5 bg-muted/15 rounded" />
+                      <div className="grid grid-cols-3 gap-2 mt-4">
+                        {[1, 2, 3].map((i) => (
+                          <div key={i} className="rounded-lg bg-secondary/30 p-3 animate-float" style={{ animationDelay: `${i * 0.2}s` }}>
+                            <div className="w-6 h-6 rounded bg-primary/20 mb-2" />
+                            <div className="h-2 w-2/3 bg-muted/30 rounded" />
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
                   </div>
                 </div>
               </div>
