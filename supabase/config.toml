@@ -2,3 +2,6 @@ project_id = "gzlafreozttvkhbnpacm"
 
 [functions.generate-website]
 verify_jwt = false
+
+[functions.generate-website-v2]
+verify_jwt = true

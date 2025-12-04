@@ -15,7 +15,7 @@ const FooterSection = () => {
                 Prêt à créer ton site ?
               </h2>
               <p className="text-lg text-white/60 max-w-xl mx-auto mb-8">
-                Rejoins des milliers d'entrepreneurs qui ont déjà créé leur site avec SITEFORGE AI.
+                Rejoins des milliers d'entrepreneurs qui ont déjà créé leur site avec Penflow.ai.
               </p>
               <a href="#tarifs" className="btn-primary group inline-flex">
                 Créer mon site maintenant
@@ -35,7 +35,7 @@ const FooterSection = () => {
               <div className="w-9 h-9 rounded-xl bg-gradient-primary flex items-center justify-center">
                 <Sparkles className="w-5 h-5 text-primary-foreground" />
               </div>
-              <span className="text-lg font-bold text-white">SITEFORGE AI</span>
+              <span className="text-lg font-bold text-white">Penflow.ai</span>
             </div>
 
             {/* Links */}
@@ -61,7 +61,7 @@ const FooterSection = () => {
           {/* Copyright */}
           <div className="mt-8 pt-8 border-t border-white/10 text-center">
             <p className="text-sm text-white/40">
-              © {new Date().getFullYear()} SITEFORGE AI. Tous droits réservés.
+              © {new Date().getFullYear()} Penflow.ai. Tous droits réservés.
             </p>
           </div>
         </div>
