@@ -11,6 +11,32 @@ const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
+// Undo command patterns
+const UNDO_PATTERNS = [
+  /reviens?\s*(à|a)?\s*la\s*version\s*pr[eé]c[eé]dente/i,
+  /undo/i,
+  /annule\s*(la)?\s*derni[eè]re\s*modification/i,
+  /r[eé]cup[eè]re\s*(la)?\s*version\s*d'?avant/i,
+  /revien[st]?\s*en\s*arri[eè]re/i,
+  /ctrl\s*z/i,
+  /retour\s*arri[eè]re/i
+];
+
+const LIST_VERSIONS_PATTERNS = [
+  /montre[sz]?\s*(moi)?\s*(les)?\s*versions?/i,
+  /liste[sz]?\s*(les)?\s*versions?/i,
+  /historique\s*(des)?\s*versions?/i,
+  /voir\s*(les)?\s*versions?/i
+];
+
+function isUndoCommand(message: string): boolean {
+  return UNDO_PATTERNS.some(pattern => pattern.test(message));
+}
+
+function isListVersionsCommand(message: string): boolean {
+  return LIST_VERSIONS_PATTERNS.some(pattern => pattern.test(message));
+}
+
 const systemPrompt = `Tu es PenFlow Pro, l'IA la plus avancée pour créer des sites web premium, modernes et convertissants.
 Tu combines les compétences de :
 • un designer professionnel (niveau Framer, Lovable, Vercel, Linear, Stripe),
@@ -150,10 +176,8 @@ serve(async (req) => {
       );
     }
 
-    // Create Supabase client with user's token
     const supabaseClient = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
     
-    // Get user from token
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: userError } = await createClient(
       SUPABASE_URL!,
@@ -168,9 +192,111 @@ serve(async (req) => {
     }
 
     const { projectId, message, currentHtml, siteStructure } = await req.json();
-
     console.log('Request received:', { projectId, message: message?.substring(0, 100) });
 
+    // ========== HANDLE LIST VERSIONS COMMAND ==========
+    if (isListVersionsCommand(message)) {
+      const { data: versions, error: versionsError } = await supabaseClient
+        .from('project_versions')
+        .select('id, version_number, created_at')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (versionsError) {
+        console.error('Error fetching versions:', versionsError);
+      }
+
+      let responseMessage = '';
+      if (!versions || versions.length === 0) {
+        responseMessage = "C'est la première version de ton projet. Aucun historique disponible pour le moment.";
+      } else {
+        responseMessage = `📜 **Historique des versions**\n\n`;
+        versions.forEach((v, i) => {
+          const date = new Date(v.created_at).toLocaleString('fr-FR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+          responseMessage += `• Version ${v.version_number} — ${date}\n`;
+        });
+        responseMessage += `\nPour revenir en arrière, dis simplement "undo" ou "reviens à la version précédente".`;
+      }
+
+      await supabaseClient
+        .from('project_messages')
+        .insert([
+          { project_id: projectId, role: 'user', content: message, tokens_used: 0 },
+          { project_id: projectId, role: 'assistant', content: responseMessage }
+        ]);
+
+      return new Response(
+        JSON.stringify({ html: currentHtml || '', message: responseMessage }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ========== HANDLE UNDO COMMAND ==========
+    if (isUndoCommand(message)) {
+      const { data: previousVersion, error: versionError } = await supabaseClient
+        .from('project_versions')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (versionError) {
+        console.error('Error fetching previous version:', versionError);
+      }
+
+      if (!previousVersion) {
+        const noVersionMessage = "C'est la première version de ton projet, il n'y a pas de version antérieure à restaurer.";
+        
+        await supabaseClient
+          .from('project_messages')
+          .insert([
+            { project_id: projectId, role: 'user', content: message, tokens_used: 0 },
+            { project_id: projectId, role: 'assistant', content: noVersionMessage }
+          ]);
+
+        return new Response(
+          JSON.stringify({ html: currentHtml || '', message: noVersionMessage }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Restore previous version
+      await supabaseClient
+        .from('projects')
+        .update({ current_html: previousVersion.html_content })
+        .eq('id', projectId);
+
+      // Delete the restored version from history
+      await supabaseClient
+        .from('project_versions')
+        .delete()
+        .eq('id', previousVersion.id);
+
+      const undoMessage = `✅ J'ai restauré la version précédente de ton site (version ${previousVersion.version_number}).\n\nTu peux poursuivre tes modifications ou demander une autre restauration.`;
+
+      await supabaseClient
+        .from('project_messages')
+        .insert([
+          { project_id: projectId, role: 'user', content: message, tokens_used: 0 },
+          { project_id: projectId, role: 'assistant', content: undoMessage }
+        ]);
+
+      return new Response(
+        JSON.stringify({ html: previousVersion.html_content, message: undoMessage }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ========== NORMAL GENERATION FLOW ==========
+    
     // Check and deduct tokens
     const { data: canDeduct, error: deductError } = await supabaseClient.rpc('deduct_tokens', {
       user_uuid: user.id,
@@ -183,6 +309,27 @@ serve(async (req) => {
         JSON.stringify({ error: 'Tokens insuffisants. Passez au plan Pro pour continuer.' }),
         { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Save current version BEFORE generating new one
+    if (currentHtml && currentHtml.trim().length > 0) {
+      // Get current version count
+      const { count } = await supabaseClient
+        .from('project_versions')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', projectId);
+
+      const newVersionNumber = (count || 0) + 1;
+
+      await supabaseClient
+        .from('project_versions')
+        .insert({
+          project_id: projectId,
+          html_content: currentHtml,
+          version_number: newVersionNumber
+        });
+
+      console.log(`Saved version ${newVersionNumber} for project ${projectId}`);
     }
 
     // Build the prompt
@@ -226,14 +373,14 @@ serve(async (req) => {
     const data = await response.json();
     let generatedHtml = data.choices?.[0]?.message?.content || '';
 
-    // Clean up the response - extract HTML if wrapped in code blocks
+    // Clean up the response
     if (generatedHtml.includes('```html')) {
       generatedHtml = generatedHtml.split('```html')[1].split('```')[0].trim();
     } else if (generatedHtml.includes('```')) {
       generatedHtml = generatedHtml.split('```')[1].split('```')[0].trim();
     }
 
-    // Generate design note explanation
+    // Generate design note
     let designNote = 'Site généré avec succès.';
     try {
       const designNoteResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
