@@ -11,35 +11,45 @@ const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-const systemPrompt = `Tu es un expert en création de sites web modernes et professionnels. Tu génères du code HTML/CSS complet, moderne et responsive.
+const systemPrompt = `Tu es un expert en création de sites web modernes et professionnels pour des landing pages de vente. Tu génères du code HTML/CSS complet, moderne et responsive.
+
+ANALYSE DU BRIEF:
+1. Identifie le type de business (trading, coaching, e-commerce, restaurant...)
+2. Identifie l'objectif (vendre, collecter des leads, prendre RDV...)
+3. Identifie le style souhaité (premium, sportif, sérieux, fun...)
+
+STRUCTURE OBLIGATOIRE POUR LANDING PAGES DE VENTE:
+1. Hero section - titre fort avec la niche, sous-titre promesse, CTA principal
+2. Section "Ce que tu vas apprendre / obtenir" - contenu de l'offre
+3. Section bénéfices / résultats concrets
+4. Section preuves / crédibilité (témoignages, résultats, expérience)
+5. Section "À qui ça s'adresse" - cible idéale
+6. FAQ - questions fréquentes
+7. CTA final - bouton d'action clair
 
 RÈGLES IMPORTANTES:
-1. Génère TOUJOURS un site complet avec toutes les sections nécessaires
-2. Utilise Tailwind CSS via CDN pour le style
+1. Génère TOUJOURS un site complet avec toutes les sections
+2. Utilise Tailwind CSS via CDN
 3. Le site DOIT être responsive (mobile-first)
-4. Utilise des couleurs modernes et cohérentes
-5. Ajoute des animations subtiles (hover, transitions)
-6. NE JAMAIS utiliser de lorem ipsum - écris du vrai contenu en français
-7. Inclus des CTA (Call-to-Action) clairs et visibles
-8. Structure hiérarchique claire (hero, sections, footer)
-
-STRUCTURE TYPE D'UN BON SITE:
-- Hero section avec titre accrocheur, sous-titre et CTA
-- Section "À propos" ou "Services"
-- Section témoignages ou portfolio
-- Section pricing ou avantages
-- Section FAQ ou contact
-- Footer avec liens et infos légales
+4. Couleurs cohérentes avec la thématique:
+   - Trading: bleu foncé, graphiques, sérieux
+   - Sport: vert, dynamique, énergique
+   - Luxe: noir, doré, minimal
+   - Tech: violet, bleu, moderne
+5. Animations subtiles (hover, transitions)
+6. NE JAMAIS utiliser lorem ipsum - contenu réel en français
+7. CTA adaptés au business ("Rejoindre la formation", "Réserver", etc.)
+8. Le H1 doit CLAIREMENT mentionner le sujet/niche
 
 STYLE MODERNE:
 - Coins arrondis (rounded-2xl, rounded-3xl)
 - Ombres douces (shadow-lg, shadow-xl)
 - Espacement généreux (py-20, px-8)
 - Gradients subtils
-- Icônes (utilise des emojis si besoin)
-- Typographie claire et lisible
+- Emojis pour les icônes
+- Typographie claire (Inter)
 
-TEMPLATE HTML DE BASE:
+TEMPLATE HTML:
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -57,9 +67,25 @@ TEMPLATE HTML DE BASE:
 </body>
 </html>
 
-Quand l'utilisateur demande une modification, adapte le HTML existant en gardant ce qui fonctionne et en modifiant uniquement ce qui est demandé.
+COPYWRITING:
+- Texte concret orienté conversion
+- Parle de ce que la personne OBTIENT
+- Parle de ce qu'elle pourra ACCOMPLIR
+- Évite les phrases floues génériques
 
 Réponds UNIQUEMENT avec le code HTML complet, sans explications.`;
+
+const designNotePrompt = `Tu es un assistant design qui explique brièvement les choix créatifs faits sur un site web.
+
+Génère une courte note de design en français (3-5 phrases max) qui explique:
+- L'inspiration/ambiance choisie
+- La palette de couleurs utilisée
+- Les sections principales créées ou modifiées
+- Le style général (moderne, premium, dynamique...)
+
+Format: texte court, style conversationnel, comme si tu expliquais à un client.
+Ne mentionne JAMAIS "agent", "IA", "Lovable" ou termes techniques.
+Commence directement par l'explication, pas de "Voici..." ou "J'ai...".`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -158,12 +184,38 @@ serve(async (req) => {
       generatedHtml = generatedHtml.split('```')[1].split('```')[0].trim();
     }
 
+    // Generate design note explanation
+    let designNote = 'Site généré avec succès.';
+    try {
+      const designNoteResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [
+            { role: 'system', content: designNotePrompt },
+            { role: 'user', content: `Brief utilisateur: "${message}"\n\nRésumé du site généré (extrait du HTML):\n${generatedHtml.substring(0, 2000)}` }
+          ],
+        }),
+      });
+
+      if (designNoteResponse.ok) {
+        const noteData = await designNoteResponse.json();
+        designNote = noteData.choices?.[0]?.message?.content || designNote;
+      }
+    } catch (noteError) {
+      console.error('Error generating design note:', noteError);
+    }
+
     // Save message to history
     await supabaseClient
       .from('project_messages')
       .insert([
         { project_id: projectId, role: 'user', content: message, tokens_used: 5 },
-        { project_id: projectId, role: 'assistant', content: 'Site mis à jour avec succès !' }
+        { project_id: projectId, role: 'assistant', content: designNote }
       ]);
 
     // Update project
@@ -177,7 +229,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         html: generatedHtml,
-        message: 'Site mis à jour avec succès !',
+        message: designNote,
         structure: siteStructure
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
