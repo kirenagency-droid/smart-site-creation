@@ -14,6 +14,156 @@ export type Database = {
   }
   public: {
     Tables: {
+      custom_domains: {
+        Row: {
+          created_at: string
+          deactivation_reason: string | null
+          deployment_id: string
+          dns_configured: boolean | null
+          domain: string
+          id: string
+          is_active: boolean | null
+          ssl_provisioned: boolean | null
+          updated_at: string
+          user_id: string
+          verification_status: string
+          verification_token: string | null
+        }
+        Insert: {
+          created_at?: string
+          deactivation_reason?: string | null
+          deployment_id: string
+          dns_configured?: boolean | null
+          domain: string
+          id?: string
+          is_active?: boolean | null
+          ssl_provisioned?: boolean | null
+          updated_at?: string
+          user_id: string
+          verification_status?: string
+          verification_token?: string | null
+        }
+        Update: {
+          created_at?: string
+          deactivation_reason?: string | null
+          deployment_id?: string
+          dns_configured?: boolean | null
+          domain?: string
+          id?: string
+          is_active?: boolean | null
+          ssl_provisioned?: boolean | null
+          updated_at?: string
+          user_id?: string
+          verification_status?: string
+          verification_token?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_domains_deployment_id_fkey"
+            columns: ["deployment_id"]
+            isOneToOne: false
+            referencedRelation: "deployments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deployment_logs: {
+        Row: {
+          created_at: string
+          deployment_id: string
+          id: string
+          level: string
+          message: string
+          metadata: Json | null
+        }
+        Insert: {
+          created_at?: string
+          deployment_id: string
+          id?: string
+          level?: string
+          message: string
+          metadata?: Json | null
+        }
+        Update: {
+          created_at?: string
+          deployment_id?: string
+          id?: string
+          level?: string
+          message?: string
+          metadata?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deployment_logs_deployment_id_fkey"
+            columns: ["deployment_id"]
+            isOneToOne: false
+            referencedRelation: "deployments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deployments: {
+        Row: {
+          created_at: string
+          custom_domain: string | null
+          deployment_type: string
+          deployment_url: string | null
+          error_message: string | null
+          external_deployment_id: string | null
+          hosting_provider: string | null
+          id: string
+          last_deployed_at: string | null
+          project_id: string
+          ssl_status: string | null
+          status: string
+          subdomain: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          custom_domain?: string | null
+          deployment_type?: string
+          deployment_url?: string | null
+          error_message?: string | null
+          external_deployment_id?: string | null
+          hosting_provider?: string | null
+          id?: string
+          last_deployed_at?: string | null
+          project_id: string
+          ssl_status?: string | null
+          status?: string
+          subdomain?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          custom_domain?: string | null
+          deployment_type?: string
+          deployment_url?: string | null
+          error_message?: string | null
+          external_deployment_id?: string | null
+          hosting_provider?: string | null
+          id?: string
+          last_deployed_at?: string | null
+          project_id?: string
+          ssl_status?: string | null
+          status?: string
+          subdomain?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deployments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       generated_sites: {
         Row: {
           business_description: string
@@ -177,14 +327,62 @@ export type Database = {
         }
         Relationships: []
       }
+      subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          plan: string
+          status: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan?: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan?: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      can_use_custom_domain: { Args: { user_uuid: string }; Returns: boolean }
+      deactivate_expired_domains: { Args: never; Returns: undefined }
       deduct_tokens: {
         Args: { amount: number; user_uuid: string }
         Returns: boolean
+      }
+      generate_subdomain: {
+        Args: { project_id: string; project_name: string }
+        Returns: string
       }
     }
     Enums: {
