@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
+import { HostingPanel } from '@/components/hosting/HostingPanel';
 import { 
   Sparkles, 
   Send, 
@@ -13,7 +14,10 @@ import {
   Coins,
   ArrowLeft,
   Code,
-  Eye
+  Eye,
+  Globe,
+  Settings,
+  X
 } from 'lucide-react';
 
 interface Message {
@@ -41,6 +45,7 @@ const Builder = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [showCode, setShowCode] = useState(false);
   const [isLoadingProject, setIsLoadingProject] = useState(true);
+  const [showHostingPanel, setShowHostingPanel] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -250,6 +255,24 @@ const Builder = () => {
             </span>
           </div>
 
+          {/* Publish Button */}
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setShowHostingPanel(true)}
+            disabled={!project?.current_html}
+          >
+            <Globe className="w-4 h-4 mr-1" />
+            Publier
+          </Button>
+
+          {/* Settings Link */}
+          <Link to="/settings">
+            <Button variant="ghost" size="sm">
+              <Settings className="w-4 h-4" />
+            </Button>
+          </Link>
+
           <Link to="/pricing">
             <Button variant="outline" size="sm">
               Mettre à niveau
@@ -433,6 +456,26 @@ const Builder = () => {
           </div>
         </div>
       </div>
+
+      {/* Hosting Panel Modal */}
+      {showHostingPanel && projectId && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h2 className="text-lg font-semibold">Publication & Hébergement</h2>
+              <button 
+                onClick={() => setShowHostingPanel(false)}
+                className="p-2 rounded-lg hover:bg-secondary transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4">
+              <HostingPanel projectId={projectId} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
