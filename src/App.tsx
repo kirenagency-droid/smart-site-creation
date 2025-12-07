@@ -9,6 +9,7 @@ import Auth from "./pages/Auth";
 import Projects from "./pages/Projects";
 import Builder from "./pages/Builder";
 import Pricing from "./pages/Pricing";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
             <Route path="/projects" element={<Projects />} />
             <Route path="/app/:projectId" element={<Builder />} />
             <Route path="/pricing" element={<Pricing />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
