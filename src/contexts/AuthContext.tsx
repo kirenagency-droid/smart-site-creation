@@ -52,7 +52,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
+        // Handle token refresh
+        if (event === 'TOKEN_REFRESHED') {
+          console.log('Token refreshed successfully');
+        }
+        
+        // Handle session expiry - redirect to auth
+        if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          return;
+        }
+
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -66,10 +79,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
+    // Initial session check with auto-refresh
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+      if (error || !session) {
+        // Try to refresh the session
+        const { data: refreshData } = await supabase.auth.refreshSession();
+        if (refreshData.session) {
+          setSession(refreshData.session);
+          setUser(refreshData.session.user);
+          fetchProfile(refreshData.session.user.id).then(setProfile);
+        } else {
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+        }
+      } else {
+        setSession(session);
+        setUser(session.user);
         fetchProfile(session.user.id).then(setProfile);
       }
       setLoading(false);
