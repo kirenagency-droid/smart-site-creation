@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { HostingPanel } from '@/components/hosting/HostingPanel';
+import { AIStatusMessages, useAIStatus } from '@/components/builder/AIStatusMessages';
+import { VisualEditMode } from '@/components/builder/VisualEditMode';
+import { ImageUploadButton } from '@/components/builder/ImageUpload';
 import { 
   Sparkles, 
   Send, 
@@ -17,7 +20,8 @@ import {
   Eye,
   Globe,
   Settings,
-  X
+  X,
+  ImagePlus
 } from 'lucide-react';
 
 interface Message {
@@ -25,6 +29,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   created_at: string;
+  image?: string;
 }
 
 interface Project {
@@ -46,9 +51,14 @@ const Builder = () => {
   const [showCode, setShowCode] = useState(false);
   const [isLoadingProject, setIsLoadingProject] = useState(true);
   const [showHostingPanel, setShowHostingPanel] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [pendingImage, setPendingImage] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  
+  const { phase, startGeneration, completeGeneration, resetStatus } = useAIStatus();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -66,6 +76,22 @@ const Builder = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Handle messages from iframe for visual edit mode
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data.type === 'element-clicked' && isEditMode) {
+        // Auto-populate the chat with an edit command
+        const editCommand = `Modifie cet élément: ${e.data.elementInfo}`;
+        setInputValue(editCommand);
+        setIsEditMode(false);
+        inputRef.current?.focus();
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [isEditMode]);
 
   const fetchProject = async () => {
     const { data, error } = await supabase
@@ -100,6 +126,20 @@ const Builder = () => {
     }
   };
 
+  const handleImageUpload = (prompt: string, imageData: string) => {
+    setPendingImage(imageData);
+    setInputValue(prompt);
+    toast({
+      title: "Image ajoutée 📷",
+      description: "L'IA va analyser cette référence visuelle",
+    });
+  };
+
+  const handleEditCommand = (command: string) => {
+    setInputValue(command);
+    inputRef.current?.focus();
+  };
+
   const handleSend = async () => {
     if (!inputValue.trim() || isGenerating || !user || !profile) return;
 
@@ -114,7 +154,9 @@ const Builder = () => {
     }
 
     const userMessage = inputValue.trim();
+    const imageToSend = pendingImage;
     setInputValue('');
+    setPendingImage(null);
     setIsGenerating(true);
 
     // Add user message to UI
@@ -123,10 +165,14 @@ const Builder = () => {
       role: 'user',
       content: userMessage,
       created_at: new Date().toISOString(),
+      image: imageToSend || undefined,
     };
     setMessages(prev => [...prev, tempUserMessage]);
 
     try {
+      // Start AI status animation
+      await startGeneration(!!project?.current_html);
+
       // Call edge function
       const { data, error } = await supabase.functions.invoke('generate-website-v2', {
         body: {
@@ -134,6 +180,7 @@ const Builder = () => {
           message: userMessage,
           currentHtml: project?.current_html || null,
           siteStructure: project?.site_structure || {},
+          imageData: imageToSend || null,
         },
       });
 
@@ -155,11 +202,14 @@ const Builder = () => {
       // Refresh profile to get updated token balance
       await refreshProfile();
 
+      // Complete AI status animation
+      completeGeneration();
+
       // Add assistant message
       const assistantMessage: Message = {
         id: `temp-assistant-${Date.now()}`,
         role: 'assistant',
-        content: data.message || "J'ai mis à jour votre site !",
+        content: data.message || "J'ai mis à jour ton site ! 🎨",
         created_at: new Date().toISOString(),
       };
       setMessages(prev => [...prev, assistantMessage]);
@@ -167,13 +217,9 @@ const Builder = () => {
       // Update local project state
       setProject(prev => prev ? { ...prev, current_html: data.html, site_structure: data.structure || {} } : null);
 
-      toast({
-        title: "Site mis à jour ! ✨",
-        description: "5 tokens utilisés",
-      });
-
     } catch (error) {
       console.error('Generation error:', error);
+      resetStatus();
       toast({
         title: "Erreur de génération",
         description: error instanceof Error ? error.message : "Une erreur est survenue",
@@ -288,7 +334,7 @@ const Builder = () => {
           {/* Chat Header */}
           <div className="p-4 border-b border-border/50">
             <p className="text-sm text-muted-foreground">
-              Décrivez votre site, l'IA s'occupe du reste.
+              Décris ton site, l'IA s'occupe du reste ✨
             </p>
           </div>
 
@@ -298,10 +344,13 @@ const Builder = () => {
               <div className="text-center py-8">
                 <Sparkles className="w-12 h-12 text-primary/30 mx-auto mb-4" />
                 <p className="text-muted-foreground text-sm">
-                  Commencez par décrire le site que vous souhaitez créer
+                  Commence par décrire le site que tu veux créer
                 </p>
                 <p className="text-xs text-muted-foreground/60 mt-2">
                   Ex: "Crée un site pour un coach sportif avec une section témoignages"
+                </p>
+                <p className="text-xs text-muted-foreground/60 mt-1">
+                  💡 Tu peux aussi uploader une image pour m'inspirer !
                 </p>
               </div>
             )}
@@ -318,20 +367,21 @@ const Builder = () => {
                       : 'bg-secondary text-foreground'
                   }`}
                 >
+                  {message.image && (
+                    <img 
+                      src={message.image} 
+                      alt="Reference" 
+                      className="w-full max-h-32 object-cover rounded-lg mb-2"
+                    />
+                  )}
                   <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                 </div>
               </div>
             ))}
 
+            {/* AI Status Messages */}
             {isGenerating && (
-              <div className="flex justify-start">
-                <div className="bg-secondary rounded-2xl px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                    <span className="text-sm text-muted-foreground">Génération en cours...</span>
-                  </div>
-                </div>
-              </div>
+              <AIStatusMessages phase={phase} />
             )}
 
             <div ref={messagesEndRef} />
@@ -342,7 +392,7 @@ const Builder = () => {
             {!canSend && (
               <div className="mb-3 p-3 rounded-xl bg-destructive/10 border border-destructive/20">
                 <p className="text-sm text-destructive font-medium">
-                  Vous avez utilisé tous vos tokens gratuits
+                  Tu as utilisé tous tes tokens gratuits
                 </p>
                 <Link to="/pricing" className="text-xs text-primary hover:underline">
                   Voir les offres →
@@ -350,13 +400,36 @@ const Builder = () => {
               </div>
             )}
 
+            {/* Pending Image Preview */}
+            {pendingImage && (
+              <div className="mb-3 relative">
+                <img 
+                  src={pendingImage} 
+                  alt="Reference" 
+                  className="w-full max-h-24 object-cover rounded-lg border border-border"
+                />
+                <button
+                  onClick={() => setPendingImage(null)}
+                  className="absolute top-1 right-1 p-1 rounded-full bg-background/80 hover:bg-destructive/20 text-muted-foreground hover:text-destructive"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
             <div className="flex gap-2">
+              {/* Image Upload Button */}
+              <ImageUploadButton 
+                onImageAnalyzed={handleImageUpload}
+                disabled={!canSend || isGenerating}
+              />
+              
               <textarea
                 ref={inputRef}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={canSend ? "Décrivez votre modification..." : "Passez au plan Pro pour continuer"}
+                placeholder={canSend ? "Décris ta modification..." : "Passe au plan Pro pour continuer"}
                 disabled={!canSend || isGenerating}
                 rows={1}
                 className="flex-1 px-4 py-3 rounded-xl bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none disabled:opacity-50"
@@ -375,7 +448,7 @@ const Builder = () => {
             </div>
 
             <p className="text-xs text-muted-foreground mt-2 text-center">
-              Chaque requête consomme 5 tokens • Il vous reste {profile?.token_balance ?? 0} tokens
+              Chaque requête consomme 5 tokens • Il te reste {profile?.token_balance ?? 0} tokens
             </p>
           </div>
         </div>
@@ -405,18 +478,30 @@ const Builder = () => {
               </button>
             </div>
 
-            {project?.current_html && (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handleDownload}>
-                  <Download className="w-4 h-4 mr-1" />
-                  Télécharger
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleOpenInNewTab}>
-                  <ExternalLink className="w-4 h-4 mr-1" />
-                  Plein écran
-                </Button>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              {/* Visual Edit Mode Button */}
+              {project?.current_html && !showCode && (
+                <VisualEditMode
+                  isActive={isEditMode}
+                  onToggle={() => setIsEditMode(!isEditMode)}
+                  onEditCommand={handleEditCommand}
+                  iframeRef={iframeRef}
+                />
+              )}
+
+              {project?.current_html && (
+                <>
+                  <Button variant="outline" size="sm" onClick={handleDownload}>
+                    <Download className="w-4 h-4 mr-1" />
+                    Télécharger
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleOpenInNewTab}>
+                    <ExternalLink className="w-4 h-4 mr-1" />
+                    Plein écran
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Preview Content */}
@@ -428,10 +513,10 @@ const Builder = () => {
                     <Sparkles className="w-10 h-10 text-muted-foreground/30" />
                   </div>
                   <p className="text-muted-foreground">
-                    Votre site apparaîtra ici
+                    Ton site apparaîtra ici
                   </p>
                   <p className="text-xs text-muted-foreground/60 mt-1">
-                    Commencez par décrire votre projet dans le chat
+                    Décris ton projet dans le chat pour commencer
                   </p>
                 </div>
               </div>
@@ -443,14 +528,20 @@ const Builder = () => {
               </div>
             ) : (
               <div className="h-full p-2">
-                <div className="h-full rounded-xl overflow-hidden bg-white shadow-lg">
+                <div className={`h-full rounded-xl overflow-hidden bg-white shadow-lg ${isEditMode ? 'ring-2 ring-primary' : ''}`}>
                   <iframe
+                    ref={iframeRef}
                     srcDoc={project.current_html}
                     title="Site Preview"
                     className="w-full h-full"
                     sandbox="allow-scripts"
                   />
                 </div>
+                {isEditMode && (
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-primary text-primary-foreground rounded-full text-sm font-medium shadow-lg animate-pulse">
+                    🎯 Clique sur un élément pour le modifier
+                  </div>
+                )}
               </div>
             )}
           </div>
