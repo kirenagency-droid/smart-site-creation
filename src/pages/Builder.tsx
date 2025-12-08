@@ -5,9 +5,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { HostingPanel } from '@/components/hosting/HostingPanel';
-import { AIStatusMessages, useAIStatus } from '@/components/builder/AIStatusMessages';
+import { AIStatusMessages, useAIStatus, AIProactiveSuggestions } from '@/components/builder/AIStatusMessages';
 import { VisualEditMode } from '@/components/builder/VisualEditMode';
-import { ImageUploadButton } from '@/components/builder/ImageUpload';
+import { ImageUploadButton, ChatDropZone } from '@/components/builder/ImageUpload';
 import { 
   Sparkles, 
   Send, 
@@ -330,30 +330,43 @@ const Builder = () => {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Chat Panel */}
-        <div className="w-[400px] border-r border-border flex flex-col bg-card/50">
-          {/* Chat Header */}
-          <div className="p-4 border-b border-border/50">
-            <p className="text-sm text-muted-foreground">
-              Décris ton site, l'IA s'occupe du reste ✨
-            </p>
-          </div>
+        <ChatDropZone 
+          onImageDrop={handleImageUpload} 
+          disabled={!canSend || isGenerating}
+        >
+          <div className="w-[400px] border-r border-border flex flex-col bg-card/50">
+            {/* Chat Header */}
+            <div className="p-4 border-b border-border/50">
+              <p className="text-sm text-muted-foreground">
+                Décris ton site, l'IA s'occupe du reste ✨
+              </p>
+              <p className="text-xs text-muted-foreground/50 mt-1">
+                Glisse une image ici pour reproduire un design
+              </p>
+            </div>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.length === 0 && (
-              <div className="text-center py-8">
-                <Sparkles className="w-12 h-12 text-primary/30 mx-auto mb-4" />
-                <p className="text-muted-foreground text-sm">
-                  Commence par décrire le site que tu veux créer
-                </p>
-                <p className="text-xs text-muted-foreground/60 mt-2">
-                  Ex: "Crée un site pour un coach sportif avec une section témoignages"
-                </p>
-                <p className="text-xs text-muted-foreground/60 mt-1">
-                  💡 Tu peux aussi uploader une image pour m'inspirer !
-                </p>
-              </div>
-            )}
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.length === 0 && (
+                <div className="text-center py-8">
+                  <Sparkles className="w-12 h-12 text-primary/30 mx-auto mb-4" />
+                  <p className="text-muted-foreground text-sm">
+                    Commence par décrire le site que tu veux créer
+                  </p>
+                  <p className="text-xs text-muted-foreground/60 mt-2">
+                    Ex: "Crée un site pour un coach sportif avec une section témoignages"
+                  </p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">
+                    💡 Tu peux aussi glisser une image pour reproduire un design !
+                  </p>
+                  
+                  {/* Proactive suggestions for new users */}
+                  <AIProactiveSuggestions 
+                    onSuggestionClick={(suggestion) => setInputValue(suggestion)}
+                    hasContent={false}
+                  />
+                </div>
+              )}
 
             {messages.map((message) => (
               <div
@@ -379,13 +392,13 @@ const Builder = () => {
               </div>
             ))}
 
-            {/* AI Status Messages */}
-            {isGenerating && (
-              <AIStatusMessages phase={phase} />
-            )}
+              {/* AI Status Messages */}
+              {isGenerating && (
+                <AIStatusMessages phase={phase} hasImage={!!pendingImage} />
+              )}
 
-            <div ref={messagesEndRef} />
-          </div>
+              <div ref={messagesEndRef} />
+            </div>
 
           {/* Input Area */}
           <div className="p-4 border-t border-border/50">
@@ -452,6 +465,7 @@ const Builder = () => {
             </p>
           </div>
         </div>
+        </ChatDropZone>
 
         {/* Preview Panel */}
         <div className="flex-1 flex flex-col bg-secondary/20">
