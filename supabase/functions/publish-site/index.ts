@@ -167,16 +167,20 @@ serve(async (req) => {
     // Upload HTML to Supabase Storage
     const sitePath = `${subdomain || customDomain}/index.html`;
     const htmlContent = project.current_html;
-    const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
+    
+    // Encode HTML content as UTF-8 bytes
+    const encoder = new TextEncoder();
+    const htmlBytes = encoder.encode(htmlContent);
 
     console.log(`Uploading site to storage: sites/${sitePath}`);
 
-    // Upload or update the file
+    // Upload or update the file with proper content type
     const { error: uploadError } = await supabaseAdmin.storage
       .from('sites')
-      .upload(sitePath, htmlBlob, {
-        contentType: 'text/html',
-        upsert: true
+      .upload(sitePath, htmlBytes, {
+        contentType: 'text/html; charset=utf-8',
+        upsert: true,
+        cacheControl: '3600'
       });
 
     if (uploadError) {
