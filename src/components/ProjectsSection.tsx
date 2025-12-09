@@ -124,7 +124,7 @@ const ProjectsSection = () => {
             {projects.map((project) => (
               <Link
                 key={project.id}
-                to={`/app?project=${project.id}`}
+                to={`/app/${project.id}`}
                 className="group cursor-pointer"
               >
                 {/* Preview Card */}
