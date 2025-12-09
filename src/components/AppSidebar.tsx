@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { 
   Home, 
@@ -18,7 +19,8 @@ import {
   FileText,
   Users2,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  Check
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -68,6 +70,7 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const [currentTheme, setCurrentTheme] = useState<'light' | 'dark' | 'system'>('system');
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -261,10 +264,60 @@ export function AppSidebar() {
                     <Moon className="w-4 h-4 text-muted-foreground" />
                     <span>Appearance</span>
                   </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="bg-popover border border-border rounded-xl shadow-lg z-50">
-                    <DropdownMenuItem className="px-3 py-2 cursor-pointer hover:bg-secondary">Light</DropdownMenuItem>
-                    <DropdownMenuItem className="px-3 py-2 cursor-pointer hover:bg-secondary">Dark</DropdownMenuItem>
-                    <DropdownMenuItem className="px-3 py-2 cursor-pointer hover:bg-secondary">System</DropdownMenuItem>
+                  <DropdownMenuSubContent className="bg-popover border border-border rounded-xl shadow-lg z-50 p-2 min-w-[200px]">
+                    {/* Theme Previews */}
+                    <div className="flex gap-2 mb-3 px-1">
+                      {/* Light Preview */}
+                      <button 
+                        className={`w-16 h-12 rounded-lg overflow-hidden border-2 transition-all ${
+                          currentTheme === 'light' ? 'border-primary' : 'border-transparent hover:border-border'
+                        }`}
+                        onClick={() => setCurrentTheme('light')}
+                      >
+                        <div className="w-full h-full bg-gradient-to-br from-pink-400 via-purple-400 to-pink-300" />
+                      </button>
+                      {/* Dark Preview */}
+                      <button 
+                        className={`w-16 h-12 rounded-lg overflow-hidden border-2 transition-all ${
+                          currentTheme === 'dark' ? 'border-primary' : 'border-transparent hover:border-border'
+                        }`}
+                        onClick={() => setCurrentTheme('dark')}
+                      >
+                        <div className="w-full h-full bg-gradient-to-br from-orange-400 via-yellow-300 to-orange-500" />
+                      </button>
+                      {/* System Preview */}
+                      <button 
+                        className={`w-16 h-12 rounded-lg overflow-hidden border-2 transition-all ${
+                          currentTheme === 'system' ? 'border-primary' : 'border-transparent hover:border-border'
+                        }`}
+                        onClick={() => setCurrentTheme('system')}
+                      >
+                        <div className="w-full h-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500" />
+                      </button>
+                    </div>
+                    
+                    {/* Theme Options */}
+                    <DropdownMenuItem 
+                      className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-secondary rounded-lg"
+                      onClick={() => setCurrentTheme('light')}
+                    >
+                      <span>Light</span>
+                      {currentTheme === 'light' && <Check className="w-4 h-4 text-primary" />}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-secondary rounded-lg"
+                      onClick={() => setCurrentTheme('dark')}
+                    >
+                      <span>Dark</span>
+                      {currentTheme === 'dark' && <Check className="w-4 h-4 text-primary" />}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-secondary rounded-lg"
+                      onClick={() => setCurrentTheme('system')}
+                    >
+                      <span>System</span>
+                      {currentTheme === 'system' && <Check className="w-4 h-4 text-primary" />}
+                    </DropdownMenuItem>
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
                 
