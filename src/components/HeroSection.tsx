@@ -2,11 +2,36 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUp, Paperclip, MessageSquare, Palette } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+
+const themeGradients = {
+  purple: `
+    radial-gradient(ellipse 80% 60% at 50% 30%, hsl(270, 80%, 50%, 0.5) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 50% at 70% 40%, hsl(300, 70%, 45%, 0.4) 0%, transparent 45%),
+    radial-gradient(ellipse 50% 40% at 30% 35%, hsl(220, 80%, 50%, 0.3) 0%, transparent 40%)
+  `,
+  yellow: `
+    radial-gradient(ellipse 80% 60% at 50% 30%, hsl(45, 90%, 50%, 0.5) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 50% at 70% 40%, hsl(35, 85%, 45%, 0.4) 0%, transparent 45%),
+    radial-gradient(ellipse 50% 40% at 30% 35%, hsl(55, 80%, 50%, 0.3) 0%, transparent 40%)
+  `,
+  blue: `
+    radial-gradient(ellipse 80% 60% at 50% 30%, hsl(210, 90%, 50%, 0.5) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 50% at 70% 40%, hsl(190, 85%, 45%, 0.4) 0%, transparent 45%),
+    radial-gradient(ellipse 50% 40% at 30% 35%, hsl(230, 80%, 50%, 0.3) 0%, transparent 40%)
+  `,
+  green: `
+    radial-gradient(ellipse 80% 60% at 50% 30%, hsl(140, 80%, 40%, 0.5) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 50% at 70% 40%, hsl(160, 70%, 35%, 0.4) 0%, transparent 45%),
+    radial-gradient(ellipse 50% 40% at 30% 35%, hsl(120, 80%, 45%, 0.3) 0%, transparent 40%)
+  `,
+};
 
 const HeroSection = () => {
   const [prompt, setPrompt] = useState("");
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { themeColor } = useTheme();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,16 +46,12 @@ const HeroSection = () => {
 
   return (
     <section className="relative min-h-[70vh] flex flex-col items-center justify-center overflow-hidden bg-background">
-      {/* Background Gradient - Purple/Pink/Blue */}
+      {/* Background Gradient - Theme based */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div 
-          className="absolute inset-0"
+          className="absolute inset-0 transition-all duration-500"
           style={{
-            background: `
-              radial-gradient(ellipse 80% 60% at 50% 30%, hsl(270, 80%, 50%, 0.5) 0%, transparent 50%),
-              radial-gradient(ellipse 60% 50% at 70% 40%, hsl(300, 70%, 45%, 0.4) 0%, transparent 45%),
-              radial-gradient(ellipse 50% 40% at 30% 35%, hsl(220, 80%, 50%, 0.3) 0%, transparent 40%)
-            `
+            background: themeGradients[themeColor]
           }}
         />
       </div>
