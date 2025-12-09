@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { 
   Home, 
   Search, 
@@ -11,7 +11,14 @@ import {
   Gift,
   Zap,
   ChevronDown,
-  PanelLeft
+  PanelLeft,
+  Settings,
+  Moon,
+  HelpCircle,
+  FileText,
+  Users2,
+  LogOut,
+  ChevronRight
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -27,6 +34,16 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const mainNavItems = [
   { title: "Home", url: "/", icon: Home },
@@ -49,12 +66,18 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
 
   const isActive = (path: string) => location.pathname === path;
 
   const userInitial = user?.email?.charAt(0).toUpperCase() || "U";
   const userEmail = user?.email || "user@example.com";
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/auth");
+  };
 
   return (
     <Sidebar 
@@ -200,11 +223,94 @@ export function AppSidebar() {
             </div>
           </button>
 
-          {/* User Avatar */}
+          {/* User Avatar with Dropdown */}
           <div className="flex items-center justify-between pt-2">
-            <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-medium">
-              {userInitial}
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background">
+                  {userInitial}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent 
+                side="top" 
+                align="start" 
+                className="w-64 bg-popover border border-border rounded-xl shadow-lg z-50 mb-2"
+              >
+                {/* User Info */}
+                <div className="flex items-center gap-3 px-3 py-3">
+                  <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-medium">
+                    {userInitial}
+                  </div>
+                  <span className="text-sm text-foreground truncate">{userEmail}</span>
+                </div>
+                
+                <DropdownMenuSeparator className="bg-border" />
+                
+                {/* Settings */}
+                <DropdownMenuItem 
+                  className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-secondary focus:bg-secondary"
+                  onClick={() => navigate("/settings")}
+                >
+                  <Settings className="w-4 h-4 text-muted-foreground" />
+                  <span>Settings</span>
+                </DropdownMenuItem>
+                
+                {/* Appearance */}
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-secondary focus:bg-secondary">
+                    <Moon className="w-4 h-4 text-muted-foreground" />
+                    <span>Appearance</span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="bg-popover border border-border rounded-xl shadow-lg z-50">
+                    <DropdownMenuItem className="px-3 py-2 cursor-pointer hover:bg-secondary">Light</DropdownMenuItem>
+                    <DropdownMenuItem className="px-3 py-2 cursor-pointer hover:bg-secondary">Dark</DropdownMenuItem>
+                    <DropdownMenuItem className="px-3 py-2 cursor-pointer hover:bg-secondary">System</DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                
+                {/* Support */}
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-secondary focus:bg-secondary">
+                    <HelpCircle className="w-4 h-4 text-muted-foreground" />
+                    <span>Support</span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="bg-popover border border-border rounded-xl shadow-lg z-50">
+                    <DropdownMenuItem className="px-3 py-2 cursor-pointer hover:bg-secondary">Help Center</DropdownMenuItem>
+                    <DropdownMenuItem className="px-3 py-2 cursor-pointer hover:bg-secondary">Contact Us</DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                
+                {/* Documentation */}
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-secondary focus:bg-secondary">
+                    <FileText className="w-4 h-4 text-muted-foreground" />
+                    <span>Documentation</span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="bg-popover border border-border rounded-xl shadow-lg z-50">
+                    <DropdownMenuItem className="px-3 py-2 cursor-pointer hover:bg-secondary">Getting Started</DropdownMenuItem>
+                    <DropdownMenuItem className="px-3 py-2 cursor-pointer hover:bg-secondary">API Reference</DropdownMenuItem>
+                    <DropdownMenuItem className="px-3 py-2 cursor-pointer hover:bg-secondary">Changelog</DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                
+                {/* Community */}
+                <DropdownMenuItem className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-secondary focus:bg-secondary">
+                  <Users2 className="w-4 h-4 text-muted-foreground" />
+                  <span>Community</span>
+                </DropdownMenuItem>
+                
+                <DropdownMenuSeparator className="bg-border" />
+                
+                {/* Sign Out */}
+                <DropdownMenuItem 
+                  className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-secondary focus:bg-secondary text-destructive"
+                  onClick={handleSignOut}
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </SidebarFooter>
       )}
