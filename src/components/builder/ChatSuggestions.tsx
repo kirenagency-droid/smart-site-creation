@@ -33,12 +33,12 @@ export const ChatSuggestions = ({ hasContent, onSuggestionClick }: ChatSuggestio
   }, [hasContent]);
 
   return (
-    <div className="flex flex-wrap gap-2 mb-3">
+    <div className="flex gap-2 mb-3 overflow-x-auto pb-1 scrollbar-hide">
       {visibleSuggestions.map((suggestion, index) => (
         <button
           key={index}
           onClick={() => onSuggestionClick(suggestion)}
-          className="px-4 py-2 rounded-full bg-secondary border border-border text-sm text-foreground hover:bg-secondary/80 hover:border-primary/50 transition-all duration-200 truncate max-w-full"
+          className="shrink-0 px-3 py-1.5 rounded-full bg-secondary/80 border border-border/50 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary hover:border-border transition-all duration-200"
         >
           {suggestion}
         </button>
