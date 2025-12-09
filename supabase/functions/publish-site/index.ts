@@ -15,6 +15,7 @@ interface PublishRequest {
 interface VercelFile {
   file: string;
   data: string;
+  encoding?: string;
 }
 
 serve(async (req) => {
@@ -181,13 +182,19 @@ serve(async (req) => {
     const htmlContent = project.current_html;
     const projectName = `creali-${subdomain || project.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
     
-    // Base64 encode the HTML content for Vercel API
-    const base64Html = btoa(unescape(encodeURIComponent(htmlContent)));
+    // For Vercel v13 API, we need to use the file upload approach
+    // Convert HTML to Uint8Array for proper encoding
+    const encoder = new TextEncoder();
+    const htmlBytes = encoder.encode(htmlContent);
+    
+    // Convert to base64 properly
+    const base64Html = btoa(String.fromCharCode(...htmlBytes));
     
     const files: VercelFile[] = [
       {
         file: "index.html",
-        data: base64Html
+        data: base64Html,
+        encoding: "base64"
       }
     ];
 
