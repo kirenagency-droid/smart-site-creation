@@ -12,6 +12,11 @@ interface PublishRequest {
   customDomain?: string;
 }
 
+interface VercelFile {
+  file: string;
+  data: string;
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -21,7 +26,15 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const vercelToken = Deno.env.get('VERCEL_TOKEN');
     
+    if (!vercelToken) {
+      return new Response(
+        JSON.stringify({ error: 'Vercel token not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Get user from auth header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -111,7 +124,7 @@ serve(async (req) => {
     // Check for existing deployment
     const { data: existingDeployment } = await supabaseAdmin
       .from('deployments')
-      .select('id')
+      .select('id, external_deployment_id')
       .eq('project_id', projectId)
       .single();
 
@@ -127,7 +140,7 @@ serve(async (req) => {
           subdomain: deploymentType === 'subdomain' ? subdomain : null,
           custom_domain: deploymentType === 'custom_domain' ? customDomain : null,
           error_message: null,
-          hosting_provider: 'supabase',
+          hosting_provider: 'vercel',
           updated_at: new Date().toISOString()
         })
         .eq('id', existingDeployment.id)
@@ -147,7 +160,7 @@ serve(async (req) => {
           deployment_type: deploymentType,
           subdomain: deploymentType === 'subdomain' ? subdomain : null,
           custom_domain: deploymentType === 'custom_domain' ? customDomain : null,
-          hosting_provider: 'supabase',
+          hosting_provider: 'vercel',
         })
         .select()
         .single();
@@ -160,39 +173,55 @@ serve(async (req) => {
     await supabaseAdmin.from('deployment_logs').insert({
       deployment_id: deploymentId,
       level: 'info',
-      message: `Starting ${deploymentType} deployment to Supabase Storage...`,
+      message: `Starting Vercel deployment...`,
       metadata: { projectId, subdomain, customDomain }
     });
 
-    // Upload HTML to Supabase Storage
-    const sitePath = `${subdomain || customDomain}/index.html`;
+    // Prepare files for Vercel deployment
     const htmlContent = project.current_html;
+    const projectName = `creali-${subdomain || project.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
     
-    // Encode HTML content as UTF-8 bytes
-    const encoder = new TextEncoder();
-    const htmlBytes = encoder.encode(htmlContent);
+    // Base64 encode the HTML content for Vercel API
+    const base64Html = btoa(unescape(encodeURIComponent(htmlContent)));
+    
+    const files: VercelFile[] = [
+      {
+        file: "index.html",
+        data: base64Html
+      }
+    ];
 
-    console.log(`Uploading site to storage: sites/${sitePath}`);
+    console.log(`Deploying to Vercel: ${projectName}`);
 
-    // First, try to delete existing file to ensure clean upload
-    await supabaseAdmin.storage.from('sites').remove([sitePath]);
+    // Create Vercel deployment
+    const vercelResponse = await fetch('https://api.vercel.com/v13/deployments', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${vercelToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: projectName,
+        files: files,
+        projectSettings: {
+          framework: null,
+        },
+        target: 'production',
+      }),
+    });
 
-    // Upload the file with proper content type
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from('sites')
-      .upload(sitePath, htmlBytes, {
-        contentType: 'text/html',
-        upsert: true,
-        cacheControl: 'no-cache'
-      });
+    const vercelData = await vercelResponse.json();
+    console.log('Vercel response:', JSON.stringify(vercelData));
 
-    if (uploadError) {
-      console.error('Storage upload error:', uploadError);
+    if (!vercelResponse.ok) {
+      const errorMsg = vercelData.error?.message || 'Vercel deployment failed';
+      console.error('Vercel error:', errorMsg);
       
       await supabaseAdmin.from('deployment_logs').insert({
         deployment_id: deploymentId,
         level: 'error',
-        message: `Storage upload failed: ${uploadError.message}`,
+        message: `Vercel deployment failed: ${errorMsg}`,
+        metadata: vercelData
       });
 
       // Update deployment with error
@@ -200,25 +229,26 @@ serve(async (req) => {
         .from('deployments')
         .update({
           status: 'failed',
-          error_message: uploadError.message,
+          error_message: errorMsg,
           updated_at: new Date().toISOString()
         })
         .eq('id', deploymentId);
 
       return new Response(
-        JSON.stringify({ error: `Upload failed: ${uploadError.message}` }),
+        JSON.stringify({ error: errorMsg }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Generate the public URL via storage
-    const deploymentUrl = `${supabaseUrl}/storage/v1/object/public/sites/${sitePath}`;
+    // Get deployment URL from Vercel response
+    const deploymentUrl = `https://${vercelData.url}`;
+    const vercelDeploymentId = vercelData.id;
 
     await supabaseAdmin.from('deployment_logs').insert({
       deployment_id: deploymentId,
       level: 'success',
-      message: `Uploaded to Supabase Storage successfully`,
-      metadata: { url: deploymentUrl }
+      message: `Vercel deployment created successfully`,
+      metadata: { vercelId: vercelDeploymentId, url: deploymentUrl }
     });
 
     // Update deployment with success
@@ -227,7 +257,7 @@ serve(async (req) => {
       .update({
         status: 'deployed',
         deployment_url: deploymentUrl,
-        external_deployment_id: null,
+        external_deployment_id: vercelDeploymentId,
         last_deployed_at: new Date().toISOString(),
         ssl_status: 'active',
       })
@@ -251,7 +281,7 @@ serve(async (req) => {
         success: true,
         deployment: finalDeployment,
         url: deploymentUrl,
-        message: `Votre site est maintenant en ligne !`
+        message: `Votre site est maintenant en ligne sur Vercel !`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
