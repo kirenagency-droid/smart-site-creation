@@ -258,15 +258,13 @@ serve(async (req) => {
   }
 });
 
-function prepareSiteFiles(htmlContent: string, siteName: string): Record<string, string> {
+function prepareSiteFiles(htmlContent: string, _siteName: string): Record<string, string> {
   // Prepare files structure for deployment
   return {
     'index.html': htmlContent,
     'vercel.json': JSON.stringify({
-      name: siteName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
-      public: true,
-      routes: [
-        { src: "/(.*)", dest: "/index.html" }
+      rewrites: [
+        { source: "/(.*)", destination: "/index.html" }
       ]
     }, null, 2)
   };
