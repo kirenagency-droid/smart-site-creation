@@ -8,6 +8,7 @@ import { HostingPanel } from '@/components/hosting/HostingPanel';
 import { AIStatusMessages, useAIStatus, AIProactiveSuggestions } from '@/components/builder/AIStatusMessages';
 import { VisualEditMode } from '@/components/builder/VisualEditMode';
 import { ImageUploadButton, ChatDropZone } from '@/components/builder/ImageUpload';
+import { ChatSuggestions } from '@/components/builder/ChatSuggestions';
 import { 
   Sparkles, 
   Send, 
@@ -413,6 +414,14 @@ const Builder = () => {
               </div>
             )}
 
+            {/* Quick Suggestions - Above input like Lovable */}
+            {canSend && !isGenerating && (
+              <ChatSuggestions 
+                hasContent={!!project?.current_html}
+                onSuggestionClick={(suggestion) => setInputValue(suggestion)}
+              />
+            )}
+
             {/* Pending Image Preview */}
             {pendingImage && (
               <div className="mb-3 relative">
@@ -430,39 +439,59 @@ const Builder = () => {
               </div>
             )}
 
-            <div className="flex gap-2">
-              {/* Image Upload Button */}
-              <ImageUploadButton 
-                onImageAnalyzed={handleImageUpload}
-                disabled={!canSend || isGenerating}
-              />
-              
+            {/* Input Container - Styled like Lovable */}
+            <div className="rounded-2xl bg-secondary border border-border p-2">
               <textarea
                 ref={inputRef}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={canSend ? "Décris ta modification..." : "Passe au plan Pro pour continuer"}
+                placeholder={canSend ? "Demande à Créali..." : "Passe au plan Pro pour continuer"}
                 disabled={!canSend || isGenerating}
                 rows={1}
-                className="flex-1 px-4 py-3 rounded-xl bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none disabled:opacity-50"
+                className="w-full px-3 py-2 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none resize-none disabled:opacity-50"
               />
-              <Button
-                onClick={handleSend}
-                disabled={!inputValue.trim() || !canSend || isGenerating}
-                className="btn-primary px-4"
-              >
-                {isGenerating ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Send className="w-4 h-4" />
-                )}
-              </Button>
+              
+              {/* Bottom bar with actions */}
+              <div className="flex items-center justify-between pt-2 border-t border-border/50 mt-2">
+                <div className="flex items-center gap-2">
+                  <ImageUploadButton 
+                    onImageAnalyzed={handleImageUpload}
+                    disabled={!canSend || isGenerating}
+                  />
+                  <button 
+                    onClick={() => setIsEditMode(!isEditMode)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      isEditMode 
+                        ? 'bg-primary/20 text-primary' 
+                        : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                    }`}
+                    disabled={!project?.current_html}
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    Visual edits
+                  </button>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {profile?.token_balance ?? 0} tokens
+                  </span>
+                  <Button
+                    onClick={handleSend}
+                    disabled={!inputValue.trim() || !canSend || isGenerating}
+                    size="sm"
+                    className="rounded-full h-8 w-8 p-0"
+                  >
+                    {isGenerating ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
             </div>
-
-            <p className="text-xs text-muted-foreground mt-2 text-center">
-              Chaque requête consomme 5 tokens • Il te reste {profile?.token_balance ?? 0} tokens
-            </p>
           </div>
           </ChatDropZone>
         </div>
