@@ -330,11 +330,11 @@ const Builder = () => {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Chat Panel */}
-        <ChatDropZone 
-          onImageDrop={handleImageUpload} 
-          disabled={!canSend || isGenerating}
-        >
-          <div className="w-[400px] border-r border-border flex flex-col bg-card/50">
+        <div className="w-[400px] shrink-0 border-r border-border flex flex-col bg-card/50">
+          <ChatDropZone 
+            onImageDrop={handleImageUpload} 
+            disabled={!canSend || isGenerating}
+          >
             {/* Chat Header */}
             <div className="p-4 border-b border-border/50">
               <p className="text-sm text-muted-foreground">
@@ -464,8 +464,8 @@ const Builder = () => {
               Chaque requête consomme 5 tokens • Il te reste {profile?.token_balance ?? 0} tokens
             </p>
           </div>
+          </ChatDropZone>
         </div>
-        </ChatDropZone>
 
         {/* Preview Panel */}
         <div className="flex-1 flex flex-col bg-secondary/20">
