@@ -1,4 +1,3 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
@@ -22,7 +21,6 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const vercelToken = Deno.env.get('VERCEL_TOKEN');
     
     // Get user from auth header
     const authHeader = req.headers.get('Authorization');
@@ -129,6 +127,7 @@ serve(async (req) => {
           subdomain: deploymentType === 'subdomain' ? subdomain : null,
           custom_domain: deploymentType === 'custom_domain' ? customDomain : null,
           error_message: null,
+          hosting_provider: 'supabase',
           updated_at: new Date().toISOString()
         })
         .eq('id', existingDeployment.id)
@@ -148,6 +147,7 @@ serve(async (req) => {
           deployment_type: deploymentType,
           subdomain: deploymentType === 'subdomain' ? subdomain : null,
           custom_domain: deploymentType === 'custom_domain' ? customDomain : null,
+          hosting_provider: 'supabase',
         })
         .select()
         .single();
@@ -160,58 +160,59 @@ serve(async (req) => {
     await supabaseAdmin.from('deployment_logs').insert({
       deployment_id: deploymentId,
       level: 'info',
-      message: `Starting ${deploymentType} deployment...`,
+      message: `Starting ${deploymentType} deployment to Supabase Storage...`,
       metadata: { projectId, subdomain, customDomain }
     });
 
-    // Prepare the HTML as a complete static site
-    const siteFiles = prepareSiteFiles(project.current_html, project.name);
+    // Upload HTML to Supabase Storage
+    const sitePath = `${subdomain || customDomain}/index.html`;
+    const htmlContent = project.current_html;
+    const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
 
-    // If Vercel token is available, deploy to Vercel
-    let deploymentUrl: string;
-    let externalDeploymentId: string | null = null;
+    console.log(`Uploading site to storage: sites/${sitePath}`);
 
-    if (vercelToken) {
-      try {
-        const vercelResult = await deployToVercel(vercelToken, siteFiles, subdomain || customDomain || 'penflow-site');
-        deploymentUrl = vercelResult.url;
-        externalDeploymentId = vercelResult.id;
+    // Upload or update the file
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from('sites')
+      .upload(sitePath, htmlBlob, {
+        contentType: 'text/html',
+        upsert: true
+      });
 
-        await supabaseAdmin.from('deployment_logs').insert({
-          deployment_id: deploymentId,
-          level: 'success',
-          message: `Deployed to Vercel successfully`,
-          metadata: { url: deploymentUrl, vercelId: externalDeploymentId }
-        });
-      } catch (vercelError: unknown) {
-        console.error('Vercel deployment error:', vercelError);
-        const vercelErrorMessage = vercelError instanceof Error ? vercelError.message : 'Unknown error';
-        
-        await supabaseAdmin.from('deployment_logs').insert({
-          deployment_id: deploymentId,
-          level: 'error',
-          message: `Vercel deployment failed: ${vercelErrorMessage}`,
-        });
-
-        // Fallback to simulated deployment
-        deploymentUrl = deploymentType === 'subdomain' 
-          ? `https://${subdomain}.penflow.site`
-          : `https://${customDomain}`;
-      }
-    } else {
-      // No Vercel token - simulate deployment (for demo/development)
-      console.log('No VERCEL_TOKEN configured - simulating deployment');
+    if (uploadError) {
+      console.error('Storage upload error:', uploadError);
       
       await supabaseAdmin.from('deployment_logs').insert({
         deployment_id: deploymentId,
-        level: 'warning',
-        message: 'Hosting provider not configured. Site URL is simulated.',
+        level: 'error',
+        message: `Storage upload failed: ${uploadError.message}`,
       });
 
-      deploymentUrl = deploymentType === 'subdomain' 
-        ? `https://${subdomain}.penflow.site`
-        : `https://${customDomain}`;
+      // Update deployment with error
+      await supabaseAdmin
+        .from('deployments')
+        .update({
+          status: 'failed',
+          error_message: uploadError.message,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', deploymentId);
+
+      return new Response(
+        JSON.stringify({ error: `Upload failed: ${uploadError.message}` }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
+
+    // Generate the public URL
+    const deploymentUrl = `${supabaseUrl}/storage/v1/object/public/sites/${sitePath}`;
+
+    await supabaseAdmin.from('deployment_logs').insert({
+      deployment_id: deploymentId,
+      level: 'success',
+      message: `Uploaded to Supabase Storage successfully`,
+      metadata: { url: deploymentUrl }
+    });
 
     // Update deployment with success
     const { data: finalDeployment, error: finalError } = await supabaseAdmin
@@ -219,9 +220,9 @@ serve(async (req) => {
       .update({
         status: 'deployed',
         deployment_url: deploymentUrl,
-        external_deployment_id: externalDeploymentId,
+        external_deployment_id: null,
         last_deployed_at: new Date().toISOString(),
-        ssl_status: deploymentType === 'subdomain' ? 'active' : 'pending',
+        ssl_status: 'active',
       })
       .eq('id', deploymentId)
       .select()
@@ -236,14 +237,14 @@ serve(async (req) => {
       message: `Site published successfully at ${deploymentUrl}`,
     });
 
+    console.log(`Site published successfully: ${deploymentUrl}`);
+
     return new Response(
       JSON.stringify({
         success: true,
         deployment: finalDeployment,
         url: deploymentUrl,
-        message: deploymentType === 'subdomain' 
-          ? `Votre site est maintenant en ligne sur ${deploymentUrl}`
-          : `Votre domaine ${customDomain} est en cours de configuration`
+        message: `Votre site est maintenant en ligne !`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -257,55 +258,3 @@ serve(async (req) => {
     );
   }
 });
-
-function prepareSiteFiles(htmlContent: string, _siteName: string): Record<string, string> {
-  // Prepare files structure for deployment
-  return {
-    'index.html': htmlContent,
-    'vercel.json': JSON.stringify({
-      rewrites: [
-        { source: "/(.*)", destination: "/index.html" }
-      ]
-    }, null, 2)
-  };
-}
-
-async function deployToVercel(
-  token: string, 
-  files: Record<string, string>, 
-  projectName: string
-): Promise<{ url: string; id: string }> {
-  // Convert files to Vercel's expected format
-  const vercelFiles = Object.entries(files).map(([path, content]) => ({
-    file: path,
-    data: btoa(unescape(encodeURIComponent(content))) // Base64 encode
-  }));
-
-  // Create deployment
-  const response = await fetch('https://api.vercel.com/v13/deployments', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      name: projectName,
-      files: vercelFiles,
-      projectSettings: {
-        framework: null
-      }
-    })
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error?.message || 'Vercel deployment failed');
-  }
-
-  const result = await response.json();
-  
-  return {
-    url: `https://${result.url}`,
-    id: result.id
-  };
-}
