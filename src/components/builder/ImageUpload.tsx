@@ -354,7 +354,7 @@ export function ChatDropZone({ onImageDrop, disabled, children }: ChatDropZonePr
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
-      className="relative flex-1 flex flex-col"
+      className="relative h-full flex flex-col"
     >
       {children}
       
