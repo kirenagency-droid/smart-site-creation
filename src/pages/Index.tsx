@@ -1,18 +1,19 @@
-import Header from "@/components/Header";
 import HeroSection from "@/components/HeroSection";
 import ProjectsSection from "@/components/ProjectsSection";
-import FooterSection from "@/components/FooterSection";
+import AppSidebar from "@/components/AppSidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 
 const Index = () => {
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <main>
-        <HeroSection />
-        <ProjectsSection />
-      </main>
-      <FooterSection />
-    </div>
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full bg-background">
+        <AppSidebar />
+        <main className="flex-1 flex flex-col">
+          <HeroSection />
+          <ProjectsSection />
+        </main>
+      </div>
+    </SidebarProvider>
   );
 };
 
