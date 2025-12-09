@@ -174,13 +174,16 @@ serve(async (req) => {
 
     console.log(`Uploading site to storage: sites/${sitePath}`);
 
-    // Upload or update the file with proper content type
+    // First, try to delete existing file to ensure clean upload
+    await supabaseAdmin.storage.from('sites').remove([sitePath]);
+
+    // Upload the file with proper content type
     const { error: uploadError } = await supabaseAdmin.storage
       .from('sites')
       .upload(sitePath, htmlBytes, {
-        contentType: 'text/html; charset=utf-8',
+        contentType: 'text/html',
         upsert: true,
-        cacheControl: '3600'
+        cacheControl: 'no-cache'
       });
 
     if (uploadError) {
@@ -208,7 +211,7 @@ serve(async (req) => {
       );
     }
 
-    // Generate the public URL
+    // Generate the public URL via storage
     const deploymentUrl = `${supabaseUrl}/storage/v1/object/public/sites/${sitePath}`;
 
     await supabaseAdmin.from('deployment_logs').insert({
