@@ -354,7 +354,106 @@ EXEMPLE - "coach fitness":
 - Bénéfices: programmes personnalisés, suivi quotidien, résultats garantis
 - CTA: "Commencer ma transformation", "Prendre RDV"
 
-========== 8) AUTO-VÉRIFICATION ==========
+========== 8) SEO AUTOMATIQUE (OBLIGATOIRE) ==========
+
+CHAQUE site généré DOIT inclure ces éléments SEO dans le <head>:
+
+1. BALISES META ESSENTIELLES:
+<meta name="description" content="[Description de 150-160 caractères résumant l'offre principale]">
+<meta name="keywords" content="[5-8 mots-clés pertinents séparés par des virgules]">
+<meta name="author" content="[Nom du business]">
+<meta name="robots" content="index, follow">
+
+2. OPEN GRAPH (pour le partage social):
+<meta property="og:title" content="[Titre accrocheur - 60 caractères max]">
+<meta property="og:description" content="[Description engageante - 155 caractères max]">
+<meta property="og:type" content="website">
+<meta property="og:url" content="[URL du site]">
+<meta property="og:image" content="[URL de l'image hero Unsplash utilisée]">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:site_name" content="[Nom du business]">
+
+3. TWITTER CARDS:
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="[Même titre que og:title]">
+<meta name="twitter:description" content="[Même description que og:description]">
+<meta name="twitter:image" content="[Même image que og:image]">
+
+4. SCHEMA.ORG (JSON-LD) - Adapter selon le type de business:
+
+Pour BUSINESS/SERVICE:
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "LocalBusiness",
+  "name": "[Nom du business]",
+  "description": "[Description courte]",
+  "url": "[URL]",
+  "telephone": "+33 X XX XX XX XX",
+  "address": {
+    "@type": "PostalAddress",
+    "addressLocality": "Paris",
+    "addressCountry": "FR"
+  },
+  "priceRange": "€€"
+}
+</script>
+
+Pour FORMATION/COACHING:
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Course",
+  "name": "[Nom de la formation]",
+  "description": "[Description]",
+  "provider": {
+    "@type": "Organization",
+    "name": "[Nom du coach/formateur]"
+  }
+}
+</script>
+
+Pour SAAS/PRODUIT:
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "[Nom du SaaS]",
+  "applicationCategory": "BusinessApplication",
+  "offers": {
+    "@type": "Offer",
+    "price": "[Prix]",
+    "priceCurrency": "EUR"
+  }
+}
+</script>
+
+Pour FAQ (ajouter si section FAQ présente):
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "[Question 1]",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "[Réponse 1]"
+      }
+    }
+  ]
+}
+</script>
+
+5. AUTRES OPTIMISATIONS SEO:
+- <link rel="canonical" href="[URL du site]">
+- <title> doit contenir le mot-clé principal + nom du business (60 caractères max)
+- Un seul <h1> par page (le titre hero)
+- Attributs alt descriptifs sur toutes les images
+- Structure sémantique: <header>, <main>, <section>, <article>, <footer>
+
+========== 9) AUTO-VÉRIFICATION ==========
 AVANT d'envoyer, vérifie :
 ✓ Au moins 7 sections distinctes ?
 ✓ Navbar sticky avec logo et CTA ?
@@ -365,6 +464,9 @@ AVANT d'envoyer, vérifie :
 ✓ Footer complet ?
 ✓ Mobile responsive (grid responsive, text responsive) ?
 ✓ Couleurs cohérentes avec la niche ?
+✓ Meta description + Open Graph + Schema.org ?
+✓ Balises alt sur toutes les images ?
+✓ Structure HTML sémantique ?
 
 ========== TEMPLATE HTML ==========
 <!DOCTYPE html>
@@ -372,7 +474,28 @@ AVANT d'envoyer, vérifie :
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>[TITRE ADAPTÉ]</title>
+  <title>[MOT-CLÉ PRINCIPAL] | [NOM DU BUSINESS]</title>
+  
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="[DESCRIPTION 150-160 CARACTÈRES]">
+  <meta name="keywords" content="[MOTS-CLÉS]">
+  <meta name="author" content="[NOM]">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="#">
+  
+  <!-- Open Graph -->
+  <meta property="og:title" content="[TITRE ACCROCHEUR]">
+  <meta property="og:description" content="[DESCRIPTION ENGAGEANTE]">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="[URL IMAGE HERO]">
+  <meta property="og:locale" content="fr_FR">
+  
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="[TITRE]">
+  <meta name="twitter:description" content="[DESCRIPTION]">
+  <meta name="twitter:image" content="[IMAGE]">
+  
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
@@ -392,17 +515,35 @@ AVANT d'envoyer, vérifie :
     .delay-400 { animation-delay: 0.4s; }
     .delay-500 { animation-delay: 0.5s; }
   </style>
+  
+  <!-- Schema.org JSON-LD -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "[TYPE ADAPTÉ]",
+    "name": "[NOM]",
+    "description": "[DESCRIPTION]"
+  }
+  </script>
 </head>
 <body class="[BG] [TEXT] antialiased">
-  <!-- NAVBAR STICKY -->
-  <!-- HERO SECTION avec animations -->
-  <!-- BÉNÉFICES / STATS -->
-  <!-- COMMENT ÇA MARCHE -->
-  <!-- FONCTIONNALITÉS -->
-  <!-- TÉMOIGNAGES avec photos -->
-  <!-- PRICING (si applicable) -->
-  <!-- FAQ -->
-  <!-- FOOTER -->
+  <header>
+    <!-- NAVBAR STICKY -->
+  </header>
+  <main>
+    <!-- HERO SECTION avec animations -->
+    <!-- BÉNÉFICES / STATS -->
+    <!-- COMMENT ÇA MARCHE -->
+    <!-- FONCTIONNALITÉS -->
+    <!-- TÉMOIGNAGES avec photos -->
+    <!-- PRICING (si applicable) -->
+    <!-- FAQ -->
+  </main>
+  <footer>
+    <!-- FOOTER -->
+  </footer>
+  
+  <!-- FAQ Schema si section FAQ présente -->
 </body>
 </html>
 
