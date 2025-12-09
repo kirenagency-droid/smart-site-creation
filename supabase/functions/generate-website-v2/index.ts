@@ -184,6 +184,74 @@ AVANT d'envoyer, vérifie :
 
 Si "non" à une question, AMÉLIORE avant d'envoyer.
 
+========== 8) IMAGES (CRITIQUE) ==========
+RÈGLES OBLIGATOIRES pour les images :
+
+1. TOUJOURS utiliser des URLs Unsplash complètes (JAMAIS de chemins locaux type "/images/x.jpg")
+2. Chaque image DOIT avoir un alt descriptif
+3. Utiliser des images PERTINENTES à la niche
+
+BANQUE D'IMAGES PAR CATÉGORIE (utilise ces URLs exactes ou similaires) :
+
+BUSINESS/CORPORATE:
+- Hero: https://images.unsplash.com/photo-1551434678-e076c223a692?w=1200&h=800&fit=crop
+- Team: https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&h=600&fit=crop
+- Office: https://images.unsplash.com/photo-1497366216548-37526070297c?w=800&h=600&fit=crop
+
+TRADING/FINANCE:
+- Hero: https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=1200&h=800&fit=crop
+- Charts: https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=800&h=600&fit=crop
+- Finance: https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=800&h=600&fit=crop
+
+COACHING/FORMATION:
+- Hero: https://images.unsplash.com/photo-1552664730-d307ca884978?w=1200&h=800&fit=crop
+- Session: https://images.unsplash.com/photo-1531482615713-2afd69097998?w=800&h=600&fit=crop
+- Education: https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=800&h=600&fit=crop
+
+FITNESS/SPORT:
+- Hero: https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1200&h=800&fit=crop
+- Gym: https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&h=600&fit=crop
+- Workout: https://images.unsplash.com/photo-1549060279-7e168fcee0c2?w=800&h=600&fit=crop
+
+FOOD/RESTAURANT:
+- Hero: https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1200&h=800&fit=crop
+- Restaurant: https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop
+- Chef: https://images.unsplash.com/photo-1552566626-52f8b828add9?w=800&h=600&fit=crop
+
+TECH/SAAS:
+- Hero: https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200&h=800&fit=crop
+- Dashboard: https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&h=600&fit=crop
+- Code: https://images.unsplash.com/photo-1488590528505-98d2b5aba04b?w=800&h=600&fit=crop
+
+E-COMMERCE:
+- Hero: https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=1200&h=800&fit=crop
+- Products: https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&h=600&fit=crop
+- Shopping: https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=800&h=600&fit=crop
+
+PORTRAITS/TESTIMONIALS (pour témoignages):
+- Portrait 1: https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop
+- Portrait 2: https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop
+- Portrait 3: https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop
+- Portrait 4: https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop
+- Portrait 5: https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&h=200&fit=crop
+
+EXEMPLES D'UTILISATION:
+<img src="https://images.unsplash.com/photo-1551434678-e076c223a692?w=1200&h=800&fit=crop" alt="Équipe professionnelle au travail" class="w-full h-64 object-cover rounded-2xl" />
+<img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop" alt="Photo de profil client" class="w-16 h-16 rounded-full object-cover" />
+
+INTERDIT:
+❌ src="/images/hero.jpg" (chemin local inexistant)
+❌ src="/public/photo.png" (chemin local)
+❌ src="placeholder.jpg" (fichier inexistant)
+❌ Images sans alt
+❌ Images non responsive
+
+OBLIGATOIRE:
+✓ URLs Unsplash complètes
+✓ Attribut alt descriptif
+✓ Classes Tailwind pour responsive (object-cover, w-full, etc.)
+✓ rounded-xl ou rounded-2xl pour le style moderne
+
 ========== TEMPLATE HTML ==========
 <!DOCTYPE html>
 <html lang="fr">
@@ -198,11 +266,11 @@ Si "non" à une question, AMÉLIORE avant d'envoyer.
   </style>
 </head>
 <body class="[COULEUR_FOND] [COULEUR_TEXTE] antialiased">
-  <!-- HERO SECTION -->
-  <!-- BÉNÉFICES -->
+  <!-- HERO SECTION avec image Unsplash -->
+  <!-- BÉNÉFICES avec icônes ou images -->
   <!-- COMMENT ÇA MARCHE -->
   <!-- FONCTIONNALITÉS -->
-  <!-- TÉMOIGNAGES -->
+  <!-- TÉMOIGNAGES avec portraits Unsplash -->
   <!-- PRIX / OFFRE -->
   <!-- FAQ -->
   <!-- FOOTER -->
