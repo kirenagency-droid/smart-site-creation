@@ -6,78 +6,78 @@
 
 @layer base {
   :root {
-    --background: 0 0% 7%;
+    --background: 0 0% 4%;
     --foreground: 0 0% 98%;
 
-    --card: 0 0% 10%;
+    --card: 0 0% 8%;
     --card-foreground: 0 0% 98%;
 
-    --popover: 0 0% 10%;
+    --popover: 0 0% 8%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 207 90% 61%;
+    --primary: 270 70% 60%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 14%;
+    --secondary: 0 0% 12%;
     --secondary-foreground: 0 0% 98%;
 
-    --muted: 0 0% 14%;
-    --muted-foreground: 0 0% 55%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 50%;
 
-    --accent: 207 90% 61%;
+    --accent: 270 70% 60%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 20%;
-    --input: 0 0% 14%;
-    --ring: 207 90% 61%;
+    --border: 0 0% 16%;
+    --input: 0 0% 12%;
+    --ring: 270 70% 60%;
 
     --radius: 0.75rem;
 
-    /* Creali Custom tokens */
-    --gradient-primary: linear-gradient(135deg, hsl(207, 90%, 61%) 0%, hsl(207, 90%, 50%) 100%);
-    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, hsl(207, 90%, 40%, 0.3) 0%, transparent 100%);
-    --gradient-card: linear-gradient(145deg, hsl(0, 0%, 12%) 0%, hsl(0, 0%, 8%) 100%);
-    --gradient-glow: radial-gradient(ellipse at center, hsl(207, 90%, 61%, 0.2) 0%, transparent 70%);
-    --gradient-arc: conic-gradient(from 180deg at 50% 100%, transparent 0deg, hsl(207, 90%, 61%) 90deg, hsl(207, 90%, 50%) 180deg, transparent 360deg);
+    /* Creali Custom tokens - Purple/Black theme */
+    --gradient-primary: linear-gradient(135deg, hsl(270, 70%, 60%) 0%, hsl(300, 70%, 50%) 100%);
+    --gradient-hero: radial-gradient(ellipse 100% 80% at 50% 20%, hsl(270, 80%, 50%, 0.4) 0%, hsl(300, 80%, 40%, 0.2) 40%, transparent 70%);
+    --gradient-card: linear-gradient(145deg, hsl(0, 0%, 10%) 0%, hsl(0, 0%, 6%) 100%);
+    --gradient-glow: radial-gradient(ellipse at center, hsl(270, 70%, 60%, 0.25) 0%, transparent 70%);
+    --gradient-arc: conic-gradient(from 180deg at 50% 100%, transparent 0deg, hsl(270, 70%, 60%) 60deg, hsl(300, 70%, 50%) 90deg, hsl(270, 70%, 60%) 120deg, transparent 180deg);
     
-    --shadow-glow: 0 0 80px hsl(207, 90%, 61%, 0.4);
-    --shadow-soft: 0 4px 30px hsl(0, 0%, 0%, 0.3);
-    --shadow-card: 0 8px 40px hsl(0, 0%, 0%, 0.2);
+    --shadow-glow: 0 0 100px hsl(270, 70%, 60%, 0.5);
+    --shadow-soft: 0 4px 30px hsl(0, 0%, 0%, 0.4);
+    --shadow-card: 0 8px 40px hsl(0, 0%, 0%, 0.3);
     
     --text-gradient: linear-gradient(135deg, hsl(0, 0%, 100%) 0%, hsl(0, 0%, 70%) 100%);
   }
 
   .dark {
-    --background: 0 0% 7%;
+    --background: 0 0% 4%;
     --foreground: 0 0% 98%;
 
-    --card: 0 0% 10%;
+    --card: 0 0% 8%;
     --card-foreground: 0 0% 98%;
 
-    --popover: 0 0% 10%;
+    --popover: 0 0% 8%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 207 90% 61%;
+    --primary: 270 70% 60%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 14%;
+    --secondary: 0 0% 12%;
     --secondary-foreground: 0 0% 98%;
 
-    --muted: 0 0% 14%;
-    --muted-foreground: 0 0% 55%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 50%;
 
-    --accent: 207 90% 61%;
+    --accent: 270 70% 60%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 62% 30%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 20%;
-    --input: 0 0% 14%;
-    --ring: 207 90% 61%;
+    --border: 0 0% 16%;
+    --input: 0 0% 12%;
+    --ring: 270 70% 60%;
   }
 }
 
@@ -172,7 +172,7 @@
     @apply max-w-7xl mx-auto px-6;
   }
 
-  /* Arc glow effect like Bolt */
+  /* Arc glow effect - Purple theme */
   .arc-glow {
     position: relative;
     overflow: hidden;
@@ -186,7 +186,7 @@
     transform: translateX(-50%);
     width: 150%;
     height: 400px;
-    background: conic-gradient(from 180deg at 50% 100%, transparent 0deg, hsl(207, 90%, 61%) 60deg, hsl(207, 90%, 65%) 90deg, hsl(207, 90%, 61%) 120deg, transparent 180deg);
+    background: conic-gradient(from 180deg at 50% 100%, transparent 0deg, hsl(270, 70%, 60%) 60deg, hsl(300, 70%, 50%) 90deg, hsl(270, 70%, 60%) 120deg, transparent 180deg);
     opacity: 0.7;
     filter: blur(2px);
     pointer-events: none;
