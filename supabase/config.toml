@@ -14,3 +14,6 @@ verify_jwt = true
 
 [functions.check-dns]
 verify_jwt = true
+
+[functions.serve-site]
+verify_jwt = false
