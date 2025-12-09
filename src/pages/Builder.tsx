@@ -533,16 +533,10 @@ const Builder = () => {
               )}
 
               {project?.current_html && (
-                <>
-                  <Button variant="outline" size="sm" onClick={handleDownload}>
-                    <Download className="w-4 h-4 mr-1" />
-                    Télécharger
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleOpenInNewTab}>
-                    <ExternalLink className="w-4 h-4 mr-1" />
-                    Plein écran
-                  </Button>
-                </>
+                <Button variant="outline" size="sm" onClick={handleOpenInNewTab}>
+                  <ExternalLink className="w-4 h-4 mr-1" />
+                  Plein écran
+                </Button>
               )}
             </div>
           </div>
