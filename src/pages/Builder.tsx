@@ -22,8 +22,13 @@ import {
   Globe,
   Settings,
   X,
-  ImagePlus
+  ImagePlus,
+  Smartphone,
+  Tablet,
+  Monitor
 } from 'lucide-react';
+
+type DevicePreview = 'desktop' | 'tablet' | 'mobile';
 
 interface Message {
   id: string;
@@ -54,6 +59,7 @@ const Builder = () => {
   const [showHostingPanel, setShowHostingPanel] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [devicePreview, setDevicePreview] = useState<DevicePreview>('desktop');
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -522,6 +528,45 @@ const Builder = () => {
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Device Preview Buttons */}
+              {project?.current_html && !showCode && (
+                <div className="flex items-center gap-1 p-1 bg-secondary rounded-lg">
+                  <button
+                    onClick={() => setDevicePreview('mobile')}
+                    className={`p-1.5 rounded-md transition-colors ${
+                      devicePreview === 'mobile' 
+                        ? 'bg-background text-foreground shadow-sm' 
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="Mobile"
+                  >
+                    <Smartphone className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setDevicePreview('tablet')}
+                    className={`p-1.5 rounded-md transition-colors ${
+                      devicePreview === 'tablet' 
+                        ? 'bg-background text-foreground shadow-sm' 
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="Tablette"
+                  >
+                    <Tablet className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setDevicePreview('desktop')}
+                    className={`p-1.5 rounded-md transition-colors ${
+                      devicePreview === 'desktop' 
+                        ? 'bg-background text-foreground shadow-sm' 
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="Ordinateur"
+                  >
+                    <Monitor className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               {/* Visual Edit Mode Button */}
               {project?.current_html && !showCode && (
                 <VisualEditMode
@@ -564,8 +609,14 @@ const Builder = () => {
                 </pre>
               </div>
             ) : (
-              <div className="h-full p-2">
-                <div className={`h-full rounded-xl overflow-hidden bg-white shadow-lg ${isEditMode ? 'ring-2 ring-primary' : ''}`}>
+              <div className="h-full p-2 flex items-start justify-center overflow-auto">
+                <div 
+                  className={`h-full rounded-xl overflow-hidden bg-white shadow-lg transition-all duration-300 ${isEditMode ? 'ring-2 ring-primary' : ''}`}
+                  style={{
+                    width: devicePreview === 'mobile' ? '375px' : devicePreview === 'tablet' ? '768px' : '100%',
+                    maxWidth: '100%',
+                  }}
+                >
                   <iframe
                     ref={iframeRef}
                     srcDoc={project.current_html}
