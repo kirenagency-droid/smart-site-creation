@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUp, Paperclip, Sparkles, Zap, Globe, Palette, Code2, Rocket } from "lucide-react";
+import { ArrowUp, Paperclip, Sparkles, Zap, Globe, Palette, Code2, Rocket, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 const themeGradients = {
   purple: `
@@ -34,21 +36,110 @@ const suggestions = [
   { icon: Rocket, text: "E-commerce product page" },
 ];
 
+// Extract a meaningful project name from the prompt
+const extractProjectName = (prompt: string): string => {
+  const lowerPrompt = prompt.toLowerCase();
+  
+  // Common keywords to look for
+  const keywords = [
+    'landing page', 'portfolio', 'dashboard', 'e-commerce', 'ecommerce', 'shop', 'store',
+    'blog', 'website', 'site', 'app', 'application', 'saas', 'startup', 'agency',
+    'restaurant', 'coach', 'fitness', 'gym', 'yoga', 'spa', 'hotel', 'travel',
+    'photography', 'music', 'gaming', 'crypto', 'nft', 'real estate', 'immobilier',
+    'avocat', 'lawyer', 'doctor', 'médecin', 'dentist', 'clinic', 'clinique',
+    'école', 'school', 'formation', 'course', 'food', 'delivery', 'livraison'
+  ];
+  
+  // Try to find a keyword in the prompt
+  for (const keyword of keywords) {
+    if (lowerPrompt.includes(keyword)) {
+      return keyword.charAt(0).toUpperCase() + keyword.slice(1);
+    }
+  }
+  
+  // Extract the most important word (usually a noun after "for", "de", "pour")
+  const patterns = [
+    /(?:for|pour|de)\s+(?:a\s+|un\s+|une\s+|my\s+|mon\s+|ma\s+)?(\w+)/i,
+    /(?:site|page|website)\s+(?:de\s+|for\s+)?(\w+)/i,
+    /(\w+)\s+(?:landing|page|site|website)/i,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = prompt.match(pattern);
+    if (match && match[1] && match[1].length > 2) {
+      const word = match[1];
+      // Skip common words
+      if (!['the', 'une', 'mon', 'for', 'avec', 'with', 'and', 'site', 'page'].includes(word.toLowerCase())) {
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      }
+    }
+  }
+  
+  // Fallback: take the first significant word
+  const words = prompt.split(/\s+/).filter(w => w.length > 3);
+  const skipWords = ['create', 'make', 'build', 'crée', 'fais', 'créer', 'faire', 'pour', 'with', 'avec', 'modern', 'moderne', 'landing', 'page', 'site', 'website'];
+  const significantWord = words.find(w => !skipWords.includes(w.toLowerCase()));
+  
+  if (significantWord) {
+    return significantWord.charAt(0).toUpperCase() + significantWord.slice(1).toLowerCase();
+  }
+  
+  return "Nouveau projet";
+};
+
 const HeroSection = () => {
   const [prompt, setPrompt] = useState("");
   const [isFocused, setIsFocused] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
   const { themeColor } = useTheme();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (prompt.trim()) {
-      if (user) {
-        navigate("/projects", { state: { initialPrompt: prompt } });
-      } else {
-        navigate("/auth", { state: { initialPrompt: prompt } });
-      }
+    if (!prompt.trim()) return;
+    
+    if (!user) {
+      navigate("/auth", { state: { initialPrompt: prompt } });
+      return;
+    }
+
+    setIsCreating(true);
+    
+    try {
+      // Extract project name from prompt
+      const projectName = extractProjectName(prompt);
+      
+      // Create the project
+      const { data: project, error } = await supabase
+        .from('projects')
+        .insert({
+          user_id: user.id,
+          name: projectName,
+          description: prompt,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast({
+        title: "Projet créé !",
+        description: `${projectName} - Génération en cours...`,
+      });
+
+      // Navigate to builder with initial prompt
+      navigate(`/app/${project.id}`, { state: { initialPrompt: prompt } });
+      
+    } catch (error) {
+      console.error('Error creating project:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de créer le projet",
+        variant: "destructive"
+      });
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -127,7 +218,7 @@ const HeroSection = () => {
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  if (prompt.trim()) {
+                  if (prompt.trim() && !isCreating) {
                     handleSubmit(e);
                   }
                 }
@@ -135,6 +226,7 @@ const HeroSection = () => {
               placeholder="Describe your website... e.g., A modern landing page for a fitness app with dark theme"
               className="w-full bg-transparent border-0 px-6 pt-5 pb-2 text-foreground placeholder:text-muted-foreground/70 focus:outline-none text-base resize-none min-h-[80px]"
               rows={2}
+              disabled={isCreating}
             />
             
             {/* Bottom Actions */}
@@ -143,6 +235,7 @@ const HeroSection = () => {
                 <button
                   type="button"
                   className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-xl transition-all duration-200"
+                  disabled={isCreating}
                 >
                   <Paperclip className="w-4 h-4" />
                   <span className="hidden sm:inline">Attach</span>
@@ -150,6 +243,7 @@ const HeroSection = () => {
                 <button
                   type="button"
                   className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-xl transition-all duration-200"
+                  disabled={isCreating}
                 >
                   <Zap className="w-4 h-4" />
                   <span className="hidden sm:inline">Templates</span>
@@ -158,12 +252,18 @@ const HeroSection = () => {
               
               <button
                 type="submit"
-                disabled={!prompt.trim()}
+                disabled={!prompt.trim() || isCreating}
                 className="group relative flex items-center gap-2 px-5 py-2.5 rounded-xl overflow-hidden transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <div className="absolute inset-0 bg-gradient-primary opacity-90 group-hover:opacity-100 transition-opacity" />
-                <span className="relative z-10 text-sm font-medium text-primary-foreground hidden sm:inline">Generate</span>
-                <ArrowUp className="relative z-10 w-4 h-4 text-primary-foreground group-hover:scale-110 transition-transform" />
+                {isCreating ? (
+                  <Loader2 className="relative z-10 w-4 h-4 text-primary-foreground animate-spin" />
+                ) : (
+                  <>
+                    <span className="relative z-10 text-sm font-medium text-primary-foreground hidden sm:inline">Generate</span>
+                    <ArrowUp className="relative z-10 w-4 h-4 text-primary-foreground group-hover:scale-110 transition-transform" />
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -179,7 +279,8 @@ const HeroSection = () => {
             <button
               key={i}
               onClick={() => handleSuggestionClick(suggestion.text)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground bg-muted/30 hover:bg-muted/50 rounded-lg border border-border/50 hover:border-primary/30 transition-all duration-200"
+              disabled={isCreating}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground bg-muted/30 hover:bg-muted/50 rounded-lg border border-border/50 hover:border-primary/30 transition-all duration-200 disabled:opacity-50"
             >
               <suggestion.icon className="w-3 h-3" />
               {suggestion.text}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -45,6 +45,7 @@ const Builder = () => {
     refreshProfile
   } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     credits,
     planLimits,
@@ -63,6 +64,7 @@ const Builder = () => {
   const [devicePreview, setDevicePreview] = useState<DevicePreview>('desktop');
   const [useStreaming, setUseStreaming] = useState(true);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [initialPromptProcessed, setInitialPromptProcessed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -146,6 +148,39 @@ const Builder = () => {
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, [isEditMode]);
+
+  // Auto-trigger generation if initial prompt is provided from navigation
+  useEffect(() => {
+    const initialPrompt = (location.state as { initialPrompt?: string })?.initialPrompt;
+    
+    if (initialPrompt && project && !isLoadingProject && !initialPromptProcessed && credits >= 1 && !isGenerating) {
+      setInitialPromptProcessed(true);
+      
+      // Clear the location state to prevent re-triggering
+      window.history.replaceState({}, document.title);
+      
+      // Add user message to UI
+      const tempUserMessage: Message = {
+        id: `temp-${Date.now()}`,
+        role: 'user',
+        content: initialPrompt,
+        created_at: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, tempUserMessage]);
+      setIsGenerating(true);
+      
+      // Start streaming generation
+      streaming.startGeneration(
+        projectId!,
+        initialPrompt,
+        project?.current_html || null,
+        project?.site_structure || {},
+        null,
+        []
+      );
+    }
+  }, [project, isLoadingProject, location.state, initialPromptProcessed, credits, isGenerating, projectId, streaming]);
+
   const fetchProject = async () => {
     const {
       data,
