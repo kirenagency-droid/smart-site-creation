@@ -189,15 +189,6 @@ const HeroSection = () => {
           <span className="text-gradient-primary">to build today?</span>
         </h1>
 
-        {/* Subtitle */}
-        <p 
-          className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-xl mb-10 animate-fade-in leading-relaxed"
-          style={{ animationDelay: "0.3s" }}
-        >
-          Describe your vision in plain words. Creali transforms it into a beautiful, 
-          production-ready website in seconds.
-        </p>
-
         {/* Premium Prompt Input Box */}
         <form 
           onSubmit={handleSubmit}
