@@ -97,8 +97,14 @@ const Builder = () => {
       };
       setMessages(prev => [...prev, assistantMessage]);
       
-      // Refresh profile for tokens
-      await refreshProfile();
+      // Consume credits after successful generation
+      const result = await consumeCredits(1, 'Génération de site');
+      if (!result.success) {
+        console.warn('Credit consumption failed:', result.error);
+      }
+      
+      // Refresh credits display
+      await refreshCredits();
       setIsGenerating(false);
     },
     onError: (error) => {
@@ -257,7 +263,9 @@ const Builder = () => {
           })
           .eq('id', projectId);
 
-        await refreshProfile();
+        // Consume credits after successful generation
+        await consumeCredits(1, 'Génération de site');
+        await refreshCredits();
         completeGeneration();
 
         const assistantMessage: Message = {
