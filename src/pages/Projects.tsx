@@ -39,51 +39,110 @@ const Projects = () => {
     }
   }, [user]);
   const fetchProjects = async () => {
-    const {
-      data,
-      error
-    } = await supabase.from('projects').select('*').order('updated_at', {
-      ascending: false
-    });
-    if (error) {
-      console.error('Error fetching projects:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger vos projets",
-        variant: "destructive"
-      });
-    } else {
-      setProjects(data || []);
+    try {
+      // Refresh session before making request
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session) {
+        // Try to refresh
+        const { error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) {
+          toast({
+            title: "Session expirée",
+            description: "Veuillez vous reconnecter",
+            variant: "destructive"
+          });
+          navigate('/auth');
+          return;
+        }
+      }
+
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        if (error.code === 'PGRST303') {
+          // JWT expired, try to refresh and retry
+          const { error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError) {
+            navigate('/auth');
+            return;
+          }
+          // Retry the request
+          const { data: retryData, error: retryError } = await supabase
+            .from('projects')
+            .select('*')
+            .order('updated_at', { ascending: false });
+          
+          if (!retryError) {
+            setProjects(retryData || []);
+          }
+        } else {
+          console.error('Error fetching projects:', error);
+          toast({
+            title: "Erreur",
+            description: "Impossible de charger vos projets",
+            variant: "destructive"
+          });
+        }
+      } else {
+        setProjects(data || []);
+      }
+    } catch (err) {
+      console.error('Error in fetchProjects:', err);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
   const createProject = async () => {
     if (!newProjectName.trim() || !user) return;
     setIsCreating(true);
-    const {
-      data,
-      error
-    } = await supabase.from('projects').insert({
-      user_id: user.id,
-      name: newProjectName.trim()
-    }).select().single();
-    if (error) {
-      console.error('Error creating project:', error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de créer le projet",
-        variant: "destructive"
-      });
-    } else if (data) {
-      toast({
-        title: "Projet créé ! 🎉",
-        description: "Commencez à décrire votre site à l'IA"
-      });
-      navigate(`/app/${data.id}`);
+    
+    try {
+      // Refresh session before creating
+      await supabase.auth.refreshSession();
+      
+      const { data, error } = await supabase
+        .from('projects')
+        .insert({
+          user_id: user.id,
+          name: newProjectName.trim()
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating project:', error);
+        if (error.code === 'PGRST303') {
+          toast({
+            title: "Session expirée",
+            description: "Veuillez vous reconnecter",
+            variant: "destructive"
+          });
+          navigate('/auth');
+          return;
+        }
+        toast({
+          title: "Erreur",
+          description: "Impossible de créer le projet",
+          variant: "destructive"
+        });
+      } else if (data) {
+        toast({
+          title: "Projet créé ! 🎉",
+          description: "Commencez à décrire votre site à l'IA"
+        });
+        navigate(`/app/${data.id}`);
+      }
+    } catch (err) {
+      console.error('Error in createProject:', err);
+    } finally {
+      setIsCreating(false);
+      setDialogOpen(false);
+      setNewProjectName('');
     }
-    setIsCreating(false);
-    setDialogOpen(false);
-    setNewProjectName('');
   };
   const deleteProject = async (projectId: string, e: React.MouseEvent) => {
     e.stopPropagation();
