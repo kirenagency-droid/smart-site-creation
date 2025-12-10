@@ -9,6 +9,8 @@ import { AIStatusMessages, useAIStatus, AIProactiveSuggestions } from '@/compone
 import { VisualEditMode } from '@/components/builder/VisualEditMode';
 import { ImageUploadButton, ChatDropZone } from '@/components/builder/ImageUpload';
 import { ChatSuggestions } from '@/components/builder/ChatSuggestions';
+import { StreamingThinking } from '@/components/builder/StreamingThinking';
+import { useStreamingGeneration } from '@/hooks/useStreamingGeneration';
 import { 
   Sparkles, 
   Send, 
@@ -25,7 +27,8 @@ import {
   ImagePlus,
   Smartphone,
   Tablet,
-  Monitor
+  Monitor,
+  StopCircle
 } from 'lucide-react';
 
 type DevicePreview = 'desktop' | 'tablet' | 'mobile';
@@ -60,12 +63,45 @@ const Builder = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [devicePreview, setDevicePreview] = useState<DevicePreview>('desktop');
+  const [useStreaming, setUseStreaming] = useState(true);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   
-  const { phase, startGeneration, completeGeneration, resetStatus } = useAIStatus();
+  const { phase, startGeneration: startLegacyGeneration, completeGeneration, resetStatus } = useAIStatus();
+
+  // Streaming generation hook
+  const streaming = useStreamingGeneration({
+    onHtmlUpdate: (html) => {
+      // Update preview in real-time during streaming
+      setProject(prev => prev ? { ...prev, current_html: html } : null);
+    },
+    onComplete: async (html, message) => {
+      setProject(prev => prev ? { ...prev, current_html: html } : null);
+      
+      // Add assistant message
+      const assistantMessage: Message = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: message || "J'ai mis à jour ton site ! 🎨",
+        created_at: new Date().toISOString(),
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+      
+      // Refresh profile for tokens
+      await refreshProfile();
+      setIsGenerating(false);
+    },
+    onError: (error) => {
+      toast({
+        title: "Erreur de génération",
+        description: error,
+        variant: "destructive",
+      });
+      setIsGenerating(false);
+    },
+  });
 
   useEffect(() => {
     if (!loading && !user) {
@@ -82,13 +118,12 @@ const Builder = () => {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, streaming.thinkingText]);
 
   // Handle messages from iframe for visual edit mode
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
       if (e.data.type === 'element-clicked' && isEditMode) {
-        // Auto-populate the chat with an edit command
         const editCommand = `Modifie cet élément: ${e.data.elementInfo}`;
         setInputValue(editCommand);
         setIsEditMode(false);
@@ -176,67 +211,78 @@ const Builder = () => {
     };
     setMessages(prev => [...prev, tempUserMessage]);
 
-    try {
-      // Start AI status animation
-      await startGeneration(!!project?.current_html);
+    // Prepare conversation history for context
+    const conversationHistory = messages.map(m => ({
+      role: m.role,
+      content: m.content,
+    }));
 
-      // Call edge function
-      const { data, error } = await supabase.functions.invoke('generate-website-v2', {
-        body: {
-          projectId,
-          message: userMessage,
-          currentHtml: project?.current_html || null,
-          siteStructure: project?.site_structure || {},
-          imageData: imageToSend || null,
-        },
-      });
+    if (useStreaming) {
+      // Use streaming generation (v3)
+      streaming.startGeneration(
+        projectId!,
+        userMessage,
+        project?.current_html || null,
+        project?.site_structure || {},
+        imageToSend,
+        conversationHistory
+      );
+    } else {
+      // Legacy non-streaming generation (v2)
+      try {
+        await startLegacyGeneration(!!project?.current_html);
 
-      if (error) throw error;
+        const { data, error } = await supabase.functions.invoke('generate-website-v2', {
+          body: {
+            projectId,
+            message: userMessage,
+            currentHtml: project?.current_html || null,
+            siteStructure: project?.site_structure || {},
+            imageData: imageToSend || null,
+          },
+        });
 
-      if (data.error) {
-        throw new Error(data.error);
+        if (error) throw error;
+        if (data.error) throw new Error(data.error);
+
+        await supabase
+          .from('projects')
+          .update({
+            current_html: data.html,
+            site_structure: data.structure || {},
+          })
+          .eq('id', projectId);
+
+        await refreshProfile();
+        completeGeneration();
+
+        const assistantMessage: Message = {
+          id: `temp-assistant-${Date.now()}`,
+          role: 'assistant',
+          content: data.message || "J'ai mis à jour ton site ! 🎨",
+          created_at: new Date().toISOString(),
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+        setProject(prev => prev ? { ...prev, current_html: data.html, site_structure: data.structure || {} } : null);
+
+      } catch (error) {
+        console.error('Generation error:', error);
+        resetStatus();
+        toast({
+          title: "Erreur de génération",
+          description: error instanceof Error ? error.message : "Une erreur est survenue",
+          variant: "destructive",
+        });
+        setMessages(prev => prev.filter(m => m.id !== tempUserMessage.id));
+      } finally {
+        setIsGenerating(false);
       }
-
-      // Update project with new HTML
-      await supabase
-        .from('projects')
-        .update({
-          current_html: data.html,
-          site_structure: data.structure || {},
-        })
-        .eq('id', projectId);
-
-      // Refresh profile to get updated token balance
-      await refreshProfile();
-
-      // Complete AI status animation
-      completeGeneration();
-
-      // Add assistant message
-      const assistantMessage: Message = {
-        id: `temp-assistant-${Date.now()}`,
-        role: 'assistant',
-        content: data.message || "J'ai mis à jour ton site ! 🎨",
-        created_at: new Date().toISOString(),
-      };
-      setMessages(prev => [...prev, assistantMessage]);
-
-      // Update local project state
-      setProject(prev => prev ? { ...prev, current_html: data.html, site_structure: data.structure || {} } : null);
-
-    } catch (error) {
-      console.error('Generation error:', error);
-      resetStatus();
-      toast({
-        title: "Erreur de génération",
-        description: error instanceof Error ? error.message : "Une erreur est survenue",
-        variant: "destructive",
-      });
-      // Remove temp user message on error
-      setMessages(prev => prev.filter(m => m.id !== tempUserMessage.id));
-    } finally {
-      setIsGenerating(false);
     }
+  };
+
+  const handleStopGeneration = () => {
+    streaming.cancelGeneration();
+    setIsGenerating(false);
   };
 
   const handleDownload = () => {
@@ -274,6 +320,8 @@ const Builder = () => {
   };
 
   const canSend = profile && (profile.plan !== 'free' || profile.token_balance >= 5);
+  const isStreaming = streaming.isStreaming;
+  const currentPhase = isStreaming ? streaming.phase : phase;
 
   if (loading || isLoadingProject) {
     return (
@@ -337,7 +385,7 @@ const Builder = () => {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Chat Panel */}
-        <div className="w-[400px] shrink-0 border-r border-border flex flex-col bg-card/50">
+        <div className="w-[420px] shrink-0 border-r border-border flex flex-col bg-card/50">
           <ChatDropZone 
             onImageDrop={handleImageUpload} 
             disabled={!canSend || isGenerating}
@@ -348,7 +396,7 @@ const Builder = () => {
                 Décris ton site, l'IA s'occupe du reste ✨
               </p>
               <p className="text-xs text-muted-foreground/50 mt-1">
-                Glisse une image ici pour reproduire un design
+                Génération streaming en temps réel
               </p>
             </div>
 
@@ -367,7 +415,6 @@ const Builder = () => {
                     💡 Tu peux aussi glisser une image pour reproduire un design !
                   </p>
                   
-                  {/* Proactive suggestions for new users */}
                   <AIProactiveSuggestions 
                     onSuggestionClick={(suggestion) => setInputValue(suggestion)}
                     hasContent={false}
@@ -375,130 +422,147 @@ const Builder = () => {
                 </div>
               )}
 
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
+              {messages.map((message) => (
                 <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                    message.role === 'user'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-secondary text-foreground'
-                  }`}
+                  key={message.id}
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
-                  {message.image && (
-                    <img 
-                      src={message.image} 
-                      alt="Reference" 
-                      className="w-full max-h-32 object-cover rounded-lg mb-2"
-                    />
-                  )}
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  <div
+                    className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                      message.role === 'user'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-secondary text-foreground'
+                    }`}
+                  >
+                    {message.image && (
+                      <img 
+                        src={message.image} 
+                        alt="Reference" 
+                        className="w-full max-h-32 object-cover rounded-lg mb-2"
+                      />
+                    )}
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
 
-              {/* AI Status Messages */}
-              {isGenerating && (
+              {/* Streaming Thinking Display */}
+              {isStreaming && (
+                <StreamingThinking 
+                  thinkingText={streaming.thinkingText}
+                  phase={streaming.phase}
+                  isStreaming={isStreaming}
+                />
+              )}
+
+              {/* Legacy AI Status Messages */}
+              {!useStreaming && isGenerating && (
                 <AIStatusMessages phase={phase} hasImage={!!pendingImage} />
               )}
 
               <div ref={messagesEndRef} />
             </div>
 
-          {/* Input Area */}
-          <div className="p-4 border-t border-border/50">
-            {!canSend && (
-              <div className="mb-3 p-3 rounded-xl bg-destructive/10 border border-destructive/20">
-                <p className="text-sm text-destructive font-medium">
-                  Tu as utilisé tous tes tokens gratuits
-                </p>
-                <Link to="/pricing" className="text-xs text-primary hover:underline">
-                  Voir les offres →
-                </Link>
-              </div>
-            )}
+            {/* Input Area */}
+            <div className="p-4 border-t border-border/50">
+              {!canSend && (
+                <div className="mb-3 p-3 rounded-xl bg-destructive/10 border border-destructive/20">
+                  <p className="text-sm text-destructive font-medium">
+                    Tu as utilisé tous tes tokens gratuits
+                  </p>
+                  <Link to="/pricing" className="text-xs text-primary hover:underline">
+                    Voir les offres →
+                  </Link>
+                </div>
+              )}
 
-            {/* Quick Suggestions - Above input like Lovable */}
-            {canSend && !isGenerating && (
-              <ChatSuggestions 
-                hasContent={!!project?.current_html}
-                onSuggestionClick={(suggestion) => setInputValue(suggestion)}
-              />
-            )}
-
-            {/* Pending Image Preview */}
-            {pendingImage && (
-              <div className="mb-3 relative">
-                <img 
-                  src={pendingImage} 
-                  alt="Reference" 
-                  className="w-full max-h-24 object-cover rounded-lg border border-border"
+              {/* Quick Suggestions */}
+              {canSend && !isGenerating && (
+                <ChatSuggestions 
+                  hasContent={!!project?.current_html}
+                  onSuggestionClick={(suggestion) => setInputValue(suggestion)}
                 />
-                <button
-                  onClick={() => setPendingImage(null)}
-                  className="absolute top-1 right-1 p-1 rounded-full bg-background/80 hover:bg-destructive/20 text-muted-foreground hover:text-destructive"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            )}
+              )}
 
-            {/* Input Container - Styled like Lovable */}
-            <div className="rounded-2xl bg-secondary border border-border p-2">
-              <textarea
-                ref={inputRef}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={canSend ? "Demande à Créali..." : "Passe au plan Pro pour continuer"}
-                disabled={!canSend || isGenerating}
-                rows={1}
-                className="w-full px-3 py-2 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none resize-none disabled:opacity-50"
-              />
-              
-              {/* Bottom bar with actions */}
-              <div className="flex items-center justify-between pt-2 border-t border-border/50 mt-2">
-                <div className="flex items-center gap-2">
-                  <ImageUploadButton 
-                    onImageAnalyzed={handleImageUpload}
-                    disabled={!canSend || isGenerating}
+              {/* Pending Image Preview */}
+              {pendingImage && (
+                <div className="mb-3 relative">
+                  <img 
+                    src={pendingImage} 
+                    alt="Reference" 
+                    className="w-full max-h-24 object-cover rounded-lg border border-border"
                   />
-                  <button 
-                    onClick={() => setIsEditMode(!isEditMode)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      isEditMode 
-                        ? 'bg-primary/20 text-primary' 
-                        : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
-                    }`}
-                    disabled={!project?.current_html}
+                  <button
+                    onClick={() => setPendingImage(null)}
+                    className="absolute top-1 right-1 p-1 rounded-full bg-background/80 hover:bg-destructive/20 text-muted-foreground hover:text-destructive"
                   >
-                    <Eye className="w-3.5 h-3.5" />
-                    Visual edits
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
+              )}
+
+              {/* Input Container */}
+              <div className="rounded-2xl bg-secondary border border-border p-2">
+                <textarea
+                  ref={inputRef}
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={canSend ? "Demande à Créali..." : "Passe au plan Pro pour continuer"}
+                  disabled={!canSend || isGenerating}
+                  rows={1}
+                  className="w-full px-3 py-2 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none resize-none disabled:opacity-50"
+                />
                 
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">
-                    {profile?.token_balance ?? 0} tokens
-                  </span>
-                  <Button
-                    onClick={handleSend}
-                    disabled={!inputValue.trim() || !canSend || isGenerating}
-                    size="sm"
-                    className="rounded-full h-8 w-8 p-0"
-                  >
+                {/* Bottom bar with actions */}
+                <div className="flex items-center justify-between pt-2 border-t border-border/50 mt-2">
+                  <div className="flex items-center gap-2">
+                    <ImageUploadButton 
+                      onImageAnalyzed={handleImageUpload}
+                      disabled={!canSend || isGenerating}
+                    />
+                    <button 
+                      onClick={() => setIsEditMode(!isEditMode)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        isEditMode 
+                          ? 'bg-primary/20 text-primary' 
+                          : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                      }`}
+                      disabled={!project?.current_html}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      Visual edits
+                    </button>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {profile?.token_balance ?? 0} tokens
+                    </span>
+                    
                     {isGenerating ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Button
+                        onClick={handleStopGeneration}
+                        size="sm"
+                        variant="destructive"
+                        className="rounded-full h-8 w-8 p-0"
+                      >
+                        <StopCircle className="w-4 h-4" />
+                      </Button>
                     ) : (
-                      <Send className="w-4 h-4" />
+                      <Button
+                        onClick={handleSend}
+                        disabled={!inputValue.trim() || !canSend}
+                        size="sm"
+                        className="rounded-full h-8 w-8 p-0"
+                      >
+                        <Send className="w-4 h-4" />
+                      </Button>
                     )}
-                  </Button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
           </ChatDropZone>
         </div>
 
@@ -528,6 +592,14 @@ const Builder = () => {
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Streaming indicator */}
+              {isStreaming && (
+                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-500 text-xs font-medium">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Génération en cours...
+                </div>
+              )}
+
               {/* Device Preview Buttons */}
               {project?.current_html && !showCode && (
                 <div className="flex items-center gap-1 p-1 bg-secondary rounded-lg">
@@ -587,7 +659,7 @@ const Builder = () => {
           </div>
 
           {/* Preview Content */}
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden relative">
             {!project?.current_html ? (
               <div className="h-full flex items-center justify-center">
                 <div className="text-center">
@@ -611,7 +683,7 @@ const Builder = () => {
             ) : (
               <div className="h-full p-2 flex items-start justify-center overflow-auto">
                 <div 
-                  className={`h-full rounded-xl overflow-hidden bg-white shadow-lg transition-all duration-300 ${isEditMode ? 'ring-2 ring-primary' : ''}`}
+                  className={`h-full rounded-xl overflow-hidden bg-white shadow-lg transition-all duration-300 ${isEditMode ? 'ring-2 ring-primary' : ''} ${isStreaming ? 'ring-2 ring-emerald-500/50' : ''}`}
                   style={{
                     width: devicePreview === 'mobile' ? '375px' : devicePreview === 'tablet' ? '768px' : '100%',
                     maxWidth: '100%',
