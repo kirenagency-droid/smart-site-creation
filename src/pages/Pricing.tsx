@@ -1,32 +1,37 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useCredits } from '@/hooks/useCredits';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Check, Sparkles, ArrowLeft, Zap } from 'lucide-react';
+import { Check, Sparkles, ArrowLeft, Zap, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface CreditTier {
   credits: number;
   dailyCredits: number;
   price: number;
   planId: string;
+  priceId: string;
   label: string;
 }
 
 const creditTiers: CreditTier[] = [
-  { credits: 100, dailyCredits: 5, price: 25, planId: 'pro', label: '100 crédits/mois' },
-  { credits: 200, dailyCredits: 10, price: 50, planId: 'pro_plus', label: '200 crédits/mois' },
-  { credits: 400, dailyCredits: 20, price: 100, planId: 'pro_max', label: '400 crédits/mois' },
-  { credits: 800, dailyCredits: 40, price: 200, planId: 'pro_ultra', label: '800 crédits/mois' },
-  { credits: 10000, dailyCredits: 200, price: 2250, planId: 'pro_extreme', label: '10 000 crédits/mois' },
+  { credits: 100, dailyCredits: 5, price: 25, planId: 'pro', priceId: 'price_1RTfmhR2xpTB0XNQZywjFwfV', label: '100 crédits/mois' },
+  { credits: 200, dailyCredits: 5, price: 50, planId: 'pro_plus', priceId: 'price_1Scl7pDZEcnw89tyPHqI9skT', label: '200 crédits/mois' },
+  { credits: 400, dailyCredits: 5, price: 100, planId: 'pro_max', priceId: 'price_1Scl8QDZEcnw89tyf0Y961q8', label: '400 crédits/mois' },
+  { credits: 800, dailyCredits: 5, price: 200, planId: 'pro_ultra', priceId: 'price_1Scl8iDZEcnw89tyoMFMXZC1', label: '800 crédits/mois' },
+  { credits: 10000, dailyCredits: 5, price: 2250, planId: 'pro_extreme', priceId: 'price_1Scl8vDZEcnw89tyTHHh70Sr', label: '10 000 crédits/mois' },
 ];
 
 const Pricing = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { subscription } = useSubscription();
   const { credits, planLimits } = useCredits();
+  const [isLoading, setIsLoading] = useState(false);
   
   const currentPlan = subscription?.plan || 'free';
   const [selectedTier, setSelectedTier] = useState<CreditTier>(
@@ -36,9 +41,28 @@ const Pricing = () => {
   const isCurrentPlan = (planId: string) => currentPlan === planId;
   const isPaidPlan = currentPlan !== 'free';
 
-  const handleTierChange = (value: string) => {
-    const tier = creditTiers.find(t => t.planId === value);
-    if (tier) setSelectedTier(tier);
+  const handleCheckout = async () => {
+    if (!user) {
+      navigate('/auth');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        body: { priceId: selectedTier.priceId },
+      });
+
+      if (error) throw error;
+      if (!data?.url) throw new Error('No checkout URL received');
+
+      window.open(data.url, '_blank');
+    } catch (error) {
+      console.error('Checkout error:', error);
+      toast.error('Erreur lors de la création du checkout');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const proFeatures = [
@@ -122,7 +146,7 @@ const Pricing = () => {
               </div>
 
               <div className="flex items-baseline gap-1 mb-6">
-                <span className="text-5xl font-bold">$0</span>
+                <span className="text-5xl font-bold">0€</span>
                 <span className="text-muted-foreground">/mois</span>
               </div>
 
@@ -199,7 +223,7 @@ const Pricing = () => {
                       )}
                       <div className="text-lg font-bold">{tier.credits}</div>
                       <div className="text-xs text-muted-foreground">crédits</div>
-                      <div className="text-sm font-semibold mt-1">${tier.price}</div>
+                      <div className="text-sm font-semibold mt-1">{tier.price}€</div>
                     </button>
                   ))}
                 </div>
@@ -223,7 +247,7 @@ const Pricing = () => {
                       )}
                       <div className="text-lg font-bold">{tier.credits >= 1000 ? `${tier.credits/1000}k` : tier.credits}</div>
                       <div className="text-xs text-muted-foreground">crédits</div>
-                      <div className="text-sm font-semibold mt-1">${tier.price}</div>
+                      <div className="text-sm font-semibold mt-1">{tier.price}€</div>
                     </button>
                   ))}
                 </div>
@@ -267,16 +291,30 @@ const Pricing = () => {
                   Plan actuel
                 </Button>
               ) : isPaidPlan ? (
-                <Button className="w-full">
-                  {creditTiers.findIndex(t => t.planId === currentPlan) < creditTiers.findIndex(t => t.planId === selectedTier.planId)
+                <Button className="w-full" onClick={handleCheckout} disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Chargement...
+                    </>
+                  ) : creditTiers.findIndex(t => t.planId === currentPlan) < creditTiers.findIndex(t => t.planId === selectedTier.planId)
                     ? 'Passer à ce plan'
                     : 'Rétrograder'
                   }
                 </Button>
               ) : (
-                <Button className="w-full gap-2">
-                  <Zap className="w-4 h-4" />
-                  Passer à Pro - ${selectedTier.price}/mois
+                <Button className="w-full gap-2" onClick={handleCheckout} disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Chargement...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4" />
+                      Passer à Pro - {selectedTier.price}€/mois
+                    </>
+                  )}
                 </Button>
               )}
             </div>
@@ -317,26 +355,17 @@ const Pricing = () => {
               <div className="p-6 rounded-2xl bg-card border border-border">
                 <h3 className="font-semibold mb-3">Recharge quotidienne</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Les plans Pro rechargent automatiquement chaque jour :
+                  Tous les plans Pro rechargent automatiquement chaque jour :
                 </p>
                 <ul className="space-y-2 text-sm">
                   <li className="flex justify-between">
-                    <span>100 crédits/mois</span>
+                    <span>Tous les plans Pro</span>
                     <span className="font-mono text-green-500">+5/jour</span>
                   </li>
-                  <li className="flex justify-between">
-                    <span>200 crédits/mois</span>
-                    <span className="font-mono text-green-500">+10/jour</span>
-                  </li>
-                  <li className="flex justify-between">
-                    <span>400 crédits/mois</span>
-                    <span className="font-mono text-green-500">+20/jour</span>
-                  </li>
-                  <li className="flex justify-between">
-                    <span>800 crédits/mois</span>
-                    <span className="font-mono text-green-500">+40/jour</span>
-                  </li>
                 </ul>
+                <p className="text-xs text-muted-foreground mt-4">
+                  Les crédits s'accumulent jusqu'au pool maximum de votre plan.
+                </p>
               </div>
             </div>
           </div>
