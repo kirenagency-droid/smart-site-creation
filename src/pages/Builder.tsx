@@ -11,6 +11,8 @@ import { ImageUploadButton, ChatDropZone } from '@/components/builder/ImageUploa
 import { ChatSuggestions } from '@/components/builder/ChatSuggestions';
 import { StreamingThinking } from '@/components/builder/StreamingThinking';
 import { useStreamingGeneration } from '@/hooks/useStreamingGeneration';
+import { ComponentPickerButton } from '@/components/builder/ComponentPicker';
+import { ComponentVariant } from '@/lib/componentLibrary';
 import { 
   Sparkles, 
   Send, 
@@ -520,6 +522,11 @@ const Builder = () => {
                     <ImageUploadButton 
                       onImageAnalyzed={handleImageUpload}
                       disabled={!canSend || isGenerating}
+                    />
+                    <ComponentPickerButton 
+                      onSelectVariant={(variant: ComponentVariant) => {
+                        setInputValue(`Ajoute cette section: ${variant.name}`);
+                      }}
                     />
                     <button 
                       onClick={() => setIsEditMode(!isEditMode)}
