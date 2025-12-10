@@ -5,14 +5,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useCredits } from '@/hooks/useCredits';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Check, Sparkles, ArrowLeft, Zap, ChevronDown } from 'lucide-react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Check, Sparkles, ArrowLeft, Zap } from 'lucide-react';
 
 interface CreditTier {
   credits: number;
@@ -179,52 +172,61 @@ const Pricing = () => {
                 ? 'border-primary bg-gradient-to-br from-primary/10 to-primary/5' 
                 : 'border-primary bg-gradient-to-br from-primary/10 to-primary/5'
             }`}>
-              {isPaidPlan && (
-                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary">
-                  Plan actuel
-                </Badge>
-              )}
-              {!isPaidPlan && (
-                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary">
-                  Recommandé
-                </Badge>
-              )}
-
               <div className="mb-6">
                 <h3 className="text-2xl font-bold mb-1">Pro</h3>
                 <p className="text-sm text-muted-foreground">Pour les créateurs sérieux</p>
               </div>
 
-              <div className="flex items-baseline gap-1 mb-6">
-                <span className="text-5xl font-bold">${selectedTier.price}</span>
-                <span className="text-muted-foreground">/mois</span>
-              </div>
-
-              {/* Credit Tier Selector */}
+              {/* Credit Tier Selector - PROMINENT */}
               <div className="mb-6">
-                <label className="text-sm font-medium mb-2 block">Choisir le nombre de crédits</label>
-                <Select 
-                  value={selectedTier.planId} 
-                  onValueChange={handleTierChange}
-                >
-                  <SelectTrigger className="w-full bg-background">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {creditTiers.map((tier) => (
-                      <SelectItem 
-                        key={tier.planId} 
-                        value={tier.planId}
-                        className="cursor-pointer"
-                      >
-                        <div className="flex items-center justify-between w-full gap-4">
-                          <span>{tier.label}</span>
-                          <span className="text-muted-foreground">${tier.price}/mois</span>
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  {creditTiers.slice(0, 3).map((tier) => (
+                    <button
+                      key={tier.planId}
+                      onClick={() => setSelectedTier(tier)}
+                      className={`relative p-3 rounded-xl border-2 transition-all text-center ${
+                        selectedTier.planId === tier.planId
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border bg-background hover:border-primary/50'
+                      }`}
+                    >
+                      {isCurrentPlan(tier.planId) && (
+                        <div className="absolute -top-2 left-1/2 -translate-x-1/2">
+                          <span className="text-[10px] font-bold bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
+                            Actuel
+                          </span>
                         </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      )}
+                      <div className="text-lg font-bold">{tier.credits}</div>
+                      <div className="text-xs text-muted-foreground">crédits</div>
+                      <div className="text-sm font-semibold mt-1">${tier.price}</div>
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {creditTiers.slice(3).map((tier) => (
+                    <button
+                      key={tier.planId}
+                      onClick={() => setSelectedTier(tier)}
+                      className={`relative p-3 rounded-xl border-2 transition-all text-center ${
+                        selectedTier.planId === tier.planId
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border bg-background hover:border-primary/50'
+                      }`}
+                    >
+                      {isCurrentPlan(tier.planId) && (
+                        <div className="absolute -top-2 left-1/2 -translate-x-1/2">
+                          <span className="text-[10px] font-bold bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
+                            Actuel
+                          </span>
+                        </div>
+                      )}
+                      <div className="text-lg font-bold">{tier.credits >= 1000 ? `${tier.credits/1000}k` : tier.credits}</div>
+                      <div className="text-xs text-muted-foreground">crédits</div>
+                      <div className="text-sm font-semibold mt-1">${tier.price}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Selected tier details */}
@@ -236,7 +238,7 @@ const Pricing = () => {
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Pool max: {selectedTier.credits * 1.5} crédits • Projets: {
+                  Pool max: {Math.round(selectedTier.credits * 1.5)} crédits • Projets: {
                     selectedTier.planId === 'pro' ? '10' :
                     selectedTier.planId === 'pro_plus' ? '20' :
                     selectedTier.planId === 'pro_max' ? '50' :
@@ -274,7 +276,7 @@ const Pricing = () => {
               ) : (
                 <Button className="w-full gap-2">
                   <Zap className="w-4 h-4" />
-                  Passer à Pro
+                  Passer à Pro - ${selectedTier.price}/mois
                 </Button>
               )}
             </div>
