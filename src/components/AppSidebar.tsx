@@ -58,8 +58,6 @@ const mainNavItems = [
 
 const projectItems = [
   { title: "All projects", url: "/projects", icon: LayoutGrid },
-  { title: "Starred", url: "/starred", icon: Star },
-  { title: "Shared with me", url: "/shared", icon: Users },
 ];
 
 const resourceItems = [
