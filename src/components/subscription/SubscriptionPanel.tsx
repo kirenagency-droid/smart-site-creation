@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Crown, Check, AlertCircle, CreditCard, Calendar, ArrowUpRight, Zap, Rocket, Star, Building2 } from 'lucide-react';
+import { Crown, Check, AlertCircle, CreditCard, Calendar, ArrowUpRight, Zap, Rocket, Star, Building2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useSubscription, SubscriptionPlan } from '@/hooks/useSubscription';
 import { useCredits } from '@/hooks/useCredits';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const planDetails: Record<SubscriptionPlan, { name: string; icon: any; color: string; price: number; monthlyCredits: number }> = {
   free: { name: 'Free', icon: Zap, color: 'text-muted-foreground', price: 0, monthlyCredits: 5 },
@@ -17,8 +20,28 @@ const planDetails: Record<SubscriptionPlan, { name: string; icon: any; color: st
 };
 
 export const SubscriptionPanel = () => {
+  const [portalLoading, setPortalLoading] = useState(false);
   const { subscription, loading: subLoading, canUseCustomDomain } = useSubscription();
   const { credits, planLimits, loading: creditsLoading } = useCredits();
+
+  const handleManageSubscription = async () => {
+    setPortalLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('customer-portal');
+      
+      if (error) throw error;
+      if (data?.url) {
+        window.open(data.url, '_blank');
+      } else {
+        throw new Error('No portal URL returned');
+      }
+    } catch (error: any) {
+      console.error('Customer portal error:', error);
+      toast.error(error.message || 'Erreur lors de l\'ouverture du portail');
+    } finally {
+      setPortalLoading(false);
+    }
+  };
 
   const loading = subLoading || creditsLoading;
 
@@ -86,7 +109,7 @@ export const SubscriptionPanel = () => {
 
           <div className="flex items-baseline gap-2">
             <span className={`text-3xl font-bold ${details.color}`}>
-              ${details.price}
+              {details.price}€
             </span>
             <span className="text-muted-foreground">/mois</span>
           </div>
@@ -117,12 +140,10 @@ export const SubscriptionPanel = () => {
           <Progress value={percentUsed} className="h-2 mb-3" />
           
           <div className="space-y-1 text-xs text-muted-foreground">
-            {!isFree && dailyCredits > 0 && (
-              <div className="flex items-center gap-2">
-                <Check className="w-3 h-3 text-green-500" />
-                <span>+{dailyCredits} crédits/jour</span>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              <Check className="w-3 h-3 text-green-500" />
+              <span>+{dailyCredits || 5} crédits/jour</span>
+            </div>
             <div className="flex items-center gap-2">
               <Check className="w-3 h-3 text-green-500" />
               <span>Pool maximum: {maxPool} crédits</span>
@@ -169,8 +190,17 @@ export const SubscriptionPanel = () => {
             </Link>
           ) : (
             <>
-              <Button variant="outline" className="flex-1">
-                Gérer l'abonnement
+              <Button 
+                variant="outline" 
+                className="flex-1"
+                onClick={handleManageSubscription}
+                disabled={portalLoading}
+              >
+                {portalLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  'Gérer l\'abonnement'
+                )}
               </Button>
               <Link to="/pricing" className="flex-1">
                 <Button variant="secondary" className="w-full">
