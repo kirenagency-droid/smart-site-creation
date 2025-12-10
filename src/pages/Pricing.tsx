@@ -1,132 +1,60 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSubscription } from '@/hooks/useSubscription';
+import { useCredits } from '@/hooks/useCredits';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Check, Sparkles, ArrowLeft, Zap, Rocket, Crown, Building2, Star } from 'lucide-react';
+import { Check, Sparkles, ArrowLeft, Zap, ChevronDown } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-const plans = [
-  {
-    id: 'free',
-    name: 'Free',
-    price: 0,
-    description: 'Pour découvrir Creali',
-    icon: Zap,
-    features: [
-      '5 crédits au total',
-      '1 projet actif',
-      'Sous-domaine creali.site',
-      'Badge Creali obligatoire',
-      'Support communautaire',
-    ],
-    limits: [
-      'Pas de recharge quotidienne',
-      'Pas de domaine personnalisé',
-    ],
-    cta: 'Commencer gratuitement',
-    popular: false,
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    price: 25,
-    description: 'Pour les créateurs sérieux',
-    icon: Zap,
-    features: [
-      '100 crédits/mois',
-      '+5 crédits/jour',
-      'Pool max: 150 crédits',
-      '10 projets actifs',
-      'Domaine personnalisé',
-      'Sans badge Creali',
-      'Vision AI + upload images',
-      'Priorité normale',
-    ],
-    limits: [],
-    cta: 'Passer à Pro',
-    popular: true,
-  },
-  {
-    id: 'pro_plus',
-    name: 'Pro+',
-    price: 50,
-    description: 'Pour les power users',
-    icon: Rocket,
-    features: [
-      '200 crédits/mois',
-      '+10 crédits/jour',
-      'Pool max: 300 crédits',
-      '20 projets actifs',
-      'Domaine personnalisé',
-      'Sans badge Creali',
-      'Priorité améliorée',
-      'Rollback version illimité',
-    ],
-    limits: [],
-    cta: 'Passer à Pro+',
-    popular: false,
-  },
-  {
-    id: 'pro_max',
-    name: 'Pro Max',
-    price: 100,
-    description: 'Pour les professionnels',
-    icon: Crown,
-    features: [
-      '400 crédits/mois',
-      '+20 crédits/jour',
-      'Pool max: 600 crédits',
-      '50 projets actifs',
-      'Priorité haute IA',
-      'Générations accélérées',
-      'Historique complet',
-    ],
-    limits: [],
-    cta: 'Passer à Pro Max',
-    popular: false,
-  },
-  {
-    id: 'pro_ultra',
-    name: 'Pro Ultra',
-    price: 200,
-    description: 'Pour les créateurs intensifs',
-    icon: Star,
-    features: [
-      '800 crédits/mois',
-      '+40 crédits/jour',
-      'Pool max: 1000 crédits',
-      '200 projets actifs',
-      'Domaines illimités',
-      'Priorité maximale',
-      'IA mode intelligent++',
-    ],
-    limits: [],
-    cta: 'Passer à Pro Ultra',
-    popular: false,
-  },
-  {
-    id: 'pro_extreme',
-    name: 'Pro Extreme',
-    price: 2250,
-    description: 'Pour agences et créateurs de masse',
-    icon: Building2,
-    features: [
-      '10 000 crédits/mois',
-      '+200 crédits/jour',
-      'Pool max: 15 000 crédits',
-      'Projets illimités',
-      'Domaines illimités',
-      'IA haute fréquence',
-      'Rebuild site en 1 requête',
-      'Support dédié',
-    ],
-    limits: [],
-    cta: 'Contacter les ventes',
-    popular: false,
-  },
+interface CreditTier {
+  credits: number;
+  dailyCredits: number;
+  price: number;
+  planId: string;
+  label: string;
+}
+
+const creditTiers: CreditTier[] = [
+  { credits: 100, dailyCredits: 5, price: 25, planId: 'pro', label: '100 crédits/mois' },
+  { credits: 200, dailyCredits: 10, price: 50, planId: 'pro_plus', label: '200 crédits/mois' },
+  { credits: 400, dailyCredits: 20, price: 100, planId: 'pro_max', label: '400 crédits/mois' },
+  { credits: 800, dailyCredits: 40, price: 200, planId: 'pro_ultra', label: '800 crédits/mois' },
+  { credits: 10000, dailyCredits: 200, price: 2250, planId: 'pro_extreme', label: '10 000 crédits/mois' },
 ];
 
 const Pricing = () => {
   const { user } = useAuth();
+  const { subscription } = useSubscription();
+  const { credits, planLimits } = useCredits();
+  
+  const currentPlan = subscription?.plan || 'free';
+  const [selectedTier, setSelectedTier] = useState<CreditTier>(
+    creditTiers.find(t => t.planId === currentPlan) || creditTiers[0]
+  );
+
+  const isCurrentPlan = (planId: string) => currentPlan === planId;
+  const isPaidPlan = currentPlan !== 'free';
+
+  const handleTierChange = (value: string) => {
+    const tier = creditTiers.find(t => t.planId === value);
+    if (tier) setSelectedTier(tier);
+  };
+
+  const proFeatures = [
+    'Domaine personnalisé',
+    'Sans badge Creali',
+    'Vision AI + upload images',
+    'Rollback version',
+    'Support prioritaire',
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -145,6 +73,17 @@ const Pricing = () => {
             </Link>
           </div>
 
+          {user && isPaidPlan && (
+            <div className="flex items-center gap-2 text-sm">
+              <Badge variant="secondary">
+                {planLimits?.name || 'Pro'}
+              </Badge>
+              <span className="text-muted-foreground">
+                {credits} crédits restants
+              </span>
+            </div>
+          )}
+
           {!user && (
             <Link to="/auth">
               <Button variant="outline">Se connecter</Button>
@@ -155,7 +94,7 @@ const Pricing = () => {
 
       {/* Pricing Section */}
       <section className="py-16 px-4">
-        <div className="container mx-auto max-w-7xl">
+        <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-12">
             <Badge className="mb-4 gap-2">
               <Sparkles className="w-3 h-3" />
@@ -165,117 +104,180 @@ const Pricing = () => {
               Choisissez votre plan
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Payez selon votre usage. Chaque génération IA consomme 1-4 crédits selon la complexité.
+              Chaque génération IA consomme 1-4 crédits selon la complexité.
             </p>
           </div>
 
-          {/* Plans Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-            {plans.slice(0, 3).map((plan) => {
-              const Icon = plan.icon;
-              return (
-                <div
-                  key={plan.id}
-                  className={`relative rounded-2xl p-6 ${
-                    plan.popular
-                      ? 'bg-gradient-to-br from-primary/10 to-primary/5 border-2 border-primary'
-                      : 'bg-card border border-border'
-                  }`}
-                >
-                  {plan.popular && (
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary">
-                      Plus populaire
-                    </Badge>
-                  )}
+          {/* Plans Grid - 2 columns */}
+          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mb-16">
+            
+            {/* FREE Plan */}
+            <div className={`relative rounded-2xl p-6 border ${
+              isCurrentPlan('free') 
+                ? 'border-primary bg-primary/5' 
+                : 'border-border bg-card'
+            }`}>
+              {isCurrentPlan('free') && (
+                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary">
+                  Plan actuel
+                </Badge>
+              )}
 
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className={`p-2 rounded-xl ${plan.popular ? 'bg-primary/20' : 'bg-secondary'}`}>
-                      <Icon className={`w-5 h-5 ${plan.popular ? 'text-primary' : 'text-muted-foreground'}`} />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-lg">{plan.name}</h3>
-                      <p className="text-xs text-muted-foreground">{plan.description}</p>
-                    </div>
-                  </div>
+              <div className="mb-6">
+                <h3 className="text-2xl font-bold mb-1">Free</h3>
+                <p className="text-sm text-muted-foreground">Pour découvrir Creali</p>
+              </div>
 
-                  <div className="flex items-baseline gap-1 mb-6">
-                    <span className="text-4xl font-bold">${plan.price}</span>
-                    <span className="text-muted-foreground">/mois</span>
-                  </div>
+              <div className="flex items-baseline gap-1 mb-6">
+                <span className="text-5xl font-bold">$0</span>
+                <span className="text-muted-foreground">/mois</span>
+              </div>
 
-                  <ul className="space-y-2 mb-6">
-                    {plan.features.map((feature) => (
-                      <li key={feature} className="flex items-center gap-2 text-sm">
-                        <Check className="w-4 h-4 text-green-500 shrink-0" />
-                        <span>{feature}</span>
-                      </li>
-                    ))}
-                    {plan.limits.map((limit) => (
-                      <li key={limit} className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span className="w-4 h-4 flex items-center justify-center shrink-0">×</span>
-                        <span>{limit}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <Button
-                    className="w-full"
-                    variant={plan.popular ? 'default' : 'outline'}
-                    asChild
-                  >
-                    <Link to={plan.id === 'free' ? '/auth' : '#'}>
-                      {plan.cta}
-                    </Link>
-                  </Button>
+              <div className="p-4 rounded-xl bg-muted/50 mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium">5 crédits</span>
+                  <span className="text-sm text-muted-foreground">au total</span>
                 </div>
-              );
-            })}
-          </div>
+                <p className="text-xs text-muted-foreground">
+                  Pas de recharge • 1 projet max
+                </p>
+              </div>
 
-          {/* Higher tier plans */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
-            {plans.slice(3).map((plan) => {
-              const Icon = plan.icon;
-              return (
-                <div
-                  key={plan.id}
-                  className="rounded-2xl p-6 bg-card border border-border"
+              <ul className="space-y-3 mb-6">
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-green-500" />
+                  <span>Sous-domaine creali.site</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <Check className="w-4 h-4 text-green-500" />
+                  <span>Génération IA basique</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="w-4 h-4 flex items-center justify-center">×</span>
+                  <span>Domaine personnalisé</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="w-4 h-4 flex items-center justify-center">×</span>
+                  <span>Badge Creali obligatoire</span>
+                </li>
+              </ul>
+
+              {isCurrentPlan('free') ? (
+                <Button variant="outline" className="w-full" disabled>
+                  Plan actuel
+                </Button>
+              ) : (
+                <Button variant="outline" className="w-full">
+                  Rétrograder
+                </Button>
+              )}
+            </div>
+
+            {/* PRO Plan with tier selector */}
+            <div className={`relative rounded-2xl p-6 border-2 ${
+              isPaidPlan 
+                ? 'border-primary bg-gradient-to-br from-primary/10 to-primary/5' 
+                : 'border-primary bg-gradient-to-br from-primary/10 to-primary/5'
+            }`}>
+              {isPaidPlan && (
+                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary">
+                  Plan actuel
+                </Badge>
+              )}
+              {!isPaidPlan && (
+                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary">
+                  Recommandé
+                </Badge>
+              )}
+
+              <div className="mb-6">
+                <h3 className="text-2xl font-bold mb-1">Pro</h3>
+                <p className="text-sm text-muted-foreground">Pour les créateurs sérieux</p>
+              </div>
+
+              <div className="flex items-baseline gap-1 mb-6">
+                <span className="text-5xl font-bold">${selectedTier.price}</span>
+                <span className="text-muted-foreground">/mois</span>
+              </div>
+
+              {/* Credit Tier Selector */}
+              <div className="mb-6">
+                <label className="text-sm font-medium mb-2 block">Choisir le nombre de crédits</label>
+                <Select 
+                  value={selectedTier.planId} 
+                  onValueChange={handleTierChange}
                 >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 rounded-xl bg-secondary">
-                      <Icon className="w-5 h-5 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-lg">{plan.name}</h3>
-                      <p className="text-xs text-muted-foreground">{plan.description}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-baseline gap-1 mb-6">
-                    <span className="text-3xl font-bold">${plan.price}</span>
-                    <span className="text-muted-foreground">/mois</span>
-                  </div>
-
-                  <ul className="space-y-2 mb-6">
-                    {plan.features.slice(0, 5).map((feature) => (
-                      <li key={feature} className="flex items-center gap-2 text-sm">
-                        <Check className="w-4 h-4 text-green-500 shrink-0" />
-                        <span>{feature}</span>
-                      </li>
+                  <SelectTrigger className="w-full bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {creditTiers.map((tier) => (
+                      <SelectItem 
+                        key={tier.planId} 
+                        value={tier.planId}
+                        className="cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between w-full gap-4">
+                          <span>{tier.label}</span>
+                          <span className="text-muted-foreground">${tier.price}/mois</span>
+                        </div>
+                      </SelectItem>
                     ))}
-                    {plan.features.length > 5 && (
-                      <li className="text-sm text-muted-foreground">
-                        +{plan.features.length - 5} autres avantages
-                      </li>
-                    )}
-                  </ul>
+                  </SelectContent>
+                </Select>
+              </div>
 
-                  <Button className="w-full" variant="outline">
-                    {plan.cta}
-                  </Button>
+              {/* Selected tier details */}
+              <div className="p-4 rounded-xl bg-background/50 border border-border/50 mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium">{selectedTier.credits} crédits/mois</span>
+                  <Badge variant="secondary" className="text-xs">
+                    +{selectedTier.dailyCredits}/jour
+                  </Badge>
                 </div>
-              );
-            })}
+                <p className="text-xs text-muted-foreground">
+                  Pool max: {selectedTier.credits * 1.5} crédits • Projets: {
+                    selectedTier.planId === 'pro' ? '10' :
+                    selectedTier.planId === 'pro_plus' ? '20' :
+                    selectedTier.planId === 'pro_max' ? '50' :
+                    selectedTier.planId === 'pro_ultra' ? '200' : 'Illimités'
+                  }
+                </p>
+              </div>
+
+              <ul className="space-y-3 mb-6">
+                {proFeatures.map((feature) => (
+                  <li key={feature} className="flex items-center gap-2 text-sm">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span>{feature}</span>
+                  </li>
+                ))}
+                {selectedTier.planId === 'pro_extreme' && (
+                  <li className="flex items-center gap-2 text-sm">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span>Support dédié</span>
+                  </li>
+                )}
+              </ul>
+
+              {isCurrentPlan(selectedTier.planId) ? (
+                <Button className="w-full" disabled>
+                  Plan actuel
+                </Button>
+              ) : isPaidPlan ? (
+                <Button className="w-full">
+                  {creditTiers.findIndex(t => t.planId === currentPlan) < creditTiers.findIndex(t => t.planId === selectedTier.planId)
+                    ? 'Passer à ce plan'
+                    : 'Rétrograder'
+                  }
+                </Button>
+              ) : (
+                <Button className="w-full gap-2">
+                  <Zap className="w-4 h-4" />
+                  Passer à Pro
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Credit Calculation Info */}
@@ -288,7 +290,7 @@ const Pricing = () => {
               <div className="p-6 rounded-2xl bg-card border border-border">
                 <h3 className="font-semibold mb-3">Consommation par tokens</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Chaque génération IA consomme des crédits selon la complexité de la demande :
+                  Chaque génération IA consomme des crédits selon la complexité :
                 </p>
                 <ul className="space-y-2 text-sm">
                   <li className="flex justify-between">
@@ -313,23 +315,23 @@ const Pricing = () => {
               <div className="p-6 rounded-2xl bg-card border border-border">
                 <h3 className="font-semibold mb-3">Recharge quotidienne</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Les plans payants rechargent automatiquement vos crédits chaque jour :
+                  Les plans Pro rechargent automatiquement chaque jour :
                 </p>
                 <ul className="space-y-2 text-sm">
                   <li className="flex justify-between">
-                    <span>Plan Pro</span>
+                    <span>100 crédits/mois</span>
                     <span className="font-mono text-green-500">+5/jour</span>
                   </li>
                   <li className="flex justify-between">
-                    <span>Plan Pro+</span>
+                    <span>200 crédits/mois</span>
                     <span className="font-mono text-green-500">+10/jour</span>
                   </li>
                   <li className="flex justify-between">
-                    <span>Plan Pro Max</span>
+                    <span>400 crédits/mois</span>
                     <span className="font-mono text-green-500">+20/jour</span>
                   </li>
                   <li className="flex justify-between">
-                    <span>Plan Pro Ultra</span>
+                    <span>800 crédits/mois</span>
                     <span className="font-mono text-green-500">+40/jour</span>
                   </li>
                 </ul>
@@ -359,18 +361,18 @@ const Pricing = () => {
                   Les crédits non utilisés sont-ils reportés ?
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  Vos crédits s'accumulent jusqu'à la limite de votre pool (ex: 150 pour Pro). 
-                  Au-delà de cette limite, les crédits quotidiens ne sont pas ajoutés.
+                  Vos crédits s'accumulent jusqu'à la limite de votre pool (ex: 150 pour 100 crédits/mois). 
+                  Au-delà, les crédits quotidiens ne sont pas ajoutés.
                 </p>
               </div>
 
               <div className="p-5 rounded-2xl bg-card border border-border">
                 <h3 className="font-semibold mb-2">
-                  Puis-je changer de plan à tout moment ?
+                  Puis-je changer de niveau à tout moment ?
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  Oui ! Vous pouvez passer à un plan supérieur immédiatement. Le changement vers un plan 
-                  inférieur prend effet à la fin de votre période de facturation actuelle.
+                  Oui ! Vous pouvez augmenter ou diminuer votre niveau de crédits à tout moment. 
+                  Le changement prend effet immédiatement.
                 </p>
               </div>
             </div>

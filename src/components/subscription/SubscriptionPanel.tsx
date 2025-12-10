@@ -7,13 +7,13 @@ import { Progress } from '@/components/ui/progress';
 import { useSubscription, SubscriptionPlan } from '@/hooks/useSubscription';
 import { useCredits } from '@/hooks/useCredits';
 
-const planDetails: Record<SubscriptionPlan, { name: string; icon: any; color: string; price: number }> = {
-  free: { name: 'Free', icon: Zap, color: 'text-muted-foreground', price: 0 },
-  pro: { name: 'Pro', icon: Zap, color: 'text-primary', price: 25 },
-  pro_plus: { name: 'Pro+', icon: Rocket, color: 'text-blue-500', price: 50 },
-  pro_max: { name: 'Pro Max', icon: Crown, color: 'text-purple-500', price: 100 },
-  pro_ultra: { name: 'Pro Ultra', icon: Star, color: 'text-yellow-500', price: 200 },
-  pro_extreme: { name: 'Pro Extreme', icon: Building2, color: 'text-red-500', price: 2250 },
+const planDetails: Record<SubscriptionPlan, { name: string; icon: any; color: string; price: number; monthlyCredits: number }> = {
+  free: { name: 'Free', icon: Zap, color: 'text-muted-foreground', price: 0, monthlyCredits: 5 },
+  pro: { name: 'Pro (100 crédits)', icon: Zap, color: 'text-primary', price: 25, monthlyCredits: 100 },
+  pro_plus: { name: 'Pro+ (200 crédits)', icon: Rocket, color: 'text-blue-500', price: 50, monthlyCredits: 200 },
+  pro_max: { name: 'Pro Max (400 crédits)', icon: Crown, color: 'text-purple-500', price: 100, monthlyCredits: 400 },
+  pro_ultra: { name: 'Pro Ultra (800 crédits)', icon: Star, color: 'text-yellow-500', price: 200, monthlyCredits: 800 },
+  pro_extreme: { name: 'Pro Extreme (10k)', icon: Building2, color: 'text-red-500', price: 2250, monthlyCredits: 10000 },
 };
 
 export const SubscriptionPanel = () => {
