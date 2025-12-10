@@ -187,26 +187,6 @@ const HeroSection = () => {
           ))}
         </div>
 
-        {/* Stats */}
-        <div 
-          className="flex items-center justify-center gap-8 mt-12 pt-8 border-t border-border/30 animate-fade-in"
-          style={{ animationDelay: "0.6s" }}
-        >
-          <div className="text-center">
-            <div className="text-2xl font-bold text-foreground">10K+</div>
-            <div className="text-xs text-muted-foreground">Sites created</div>
-          </div>
-          <div className="w-px h-10 bg-border/50" />
-          <div className="text-center">
-            <div className="text-2xl font-bold text-foreground">&lt;30s</div>
-            <div className="text-xs text-muted-foreground">Average build time</div>
-          </div>
-          <div className="w-px h-10 bg-border/50" />
-          <div className="text-center">
-            <div className="text-2xl font-bold text-foreground">Free</div>
-            <div className="text-xs text-muted-foreground">To get started</div>
-          </div>
-        </div>
       </div>
     </section>
   );
