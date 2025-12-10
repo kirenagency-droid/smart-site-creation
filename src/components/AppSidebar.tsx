@@ -19,10 +19,14 @@ import {
   Users2,
   LogOut,
   Check,
-  Sparkles
+  Sparkles,
+  Coins
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useCredits } from "@/hooks/useCredits";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Progress } from "@/components/ui/progress";
 import {
   Sidebar,
   SidebarContent,
@@ -71,11 +75,16 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { themeColor, setThemeColor, themeMode, setThemeMode } = useTheme();
+  const { credits, planLimits, loading: creditsLoading } = useCredits();
 
   const isActive = (path: string) => location.pathname === path;
 
   const userInitial = user?.email?.charAt(0).toUpperCase() || "U";
   const userEmail = user?.email || "user@example.com";
+  
+  const creditsPercentage = planLimits?.max_credit_pool 
+    ? (credits / planLimits.max_credit_pool) * 100 
+    : 0;
 
   const handleSignOut = async () => {
     await signOut();
@@ -107,15 +116,76 @@ export function AppSidebar() {
 
         {/* User Dropdown */}
         {!collapsed && (
-          <button className="w-full flex items-center gap-3 px-3.5 py-3 bg-secondary/40 hover:bg-secondary/60 rounded-xl transition-all duration-200 border border-transparent hover:border-border/50">
-            <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center text-primary-foreground text-sm font-semibold shadow-sm">
-              {userInitial}
-            </div>
-            <span className="flex-1 text-left text-sm text-foreground truncate font-medium">
-              {userEmail}
-            </span>
-            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-          </button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="w-full flex items-center gap-3 px-3.5 py-3 bg-secondary/40 hover:bg-secondary/60 rounded-xl transition-all duration-200 border border-transparent hover:border-border/50">
+                <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center text-primary-foreground text-sm font-semibold shadow-sm">
+                  {userInitial}
+                </div>
+                <span className="flex-1 text-left text-sm text-foreground truncate font-medium">
+                  {userEmail}
+                </span>
+                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent 
+              side="bottom" 
+              align="start" 
+              className="w-64 p-4 bg-popover/95 backdrop-blur-xl border border-border rounded-xl shadow-elevated"
+            >
+              <div className="space-y-4">
+                {/* User Info */}
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center text-primary-foreground font-semibold shadow-sm">
+                    {userInitial}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{userEmail}</p>
+                    <p className="text-xs text-muted-foreground">{planLimits?.name || 'Free'} Plan</p>
+                  </div>
+                </div>
+
+                {/* Credits Display */}
+                <div className="p-3 bg-secondary/30 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Coins className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-medium text-foreground">Crédits</span>
+                    </div>
+                    <span className="text-sm font-semibold text-foreground">
+                      {creditsLoading ? '...' : credits}
+                      <span className="text-muted-foreground font-normal">
+                        /{planLimits?.max_credit_pool || 5}
+                      </span>
+                    </span>
+                  </div>
+                  <Progress 
+                    value={creditsPercentage} 
+                    className="h-2"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    +{planLimits?.daily_credits || 5} crédits/jour
+                  </p>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => navigate('/settings')}
+                    className="flex-1 px-3 py-2 text-xs font-medium text-foreground bg-secondary/50 hover:bg-secondary rounded-lg transition-colors"
+                  >
+                    Paramètres
+                  </button>
+                  <button 
+                    onClick={() => navigate('/pricing')}
+                    className="flex-1 px-3 py-2 text-xs font-medium text-primary-foreground bg-gradient-primary rounded-lg hover:opacity-90 transition-opacity"
+                  >
+                    Upgrade
+                  </button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         )}
       </SidebarHeader>
 
