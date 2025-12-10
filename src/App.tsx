@@ -11,6 +11,7 @@ import Projects from "./pages/Projects";
 import Builder from "./pages/Builder";
 import Pricing from "./pages/Pricing";
 import Settings from "./pages/Settings";
+import Shared from "./pages/Shared";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import CheckoutCancel from "./pages/CheckoutCancel";
 import NotFound from "./pages/NotFound";
@@ -29,6 +30,7 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/projects" element={<Projects />} />
+              <Route path="/shared" element={<Shared />} />
               <Route path="/app/:projectId" element={<Builder />} />
               <Route path="/pricing" element={<Pricing />} />
               <Route path="/settings" element={<Settings />} />
