@@ -1,31 +1,38 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUp, Paperclip, Sparkles, Zap } from "lucide-react";
+import { ArrowUp, Paperclip, Sparkles, Zap, Globe, Palette, Code2, Rocket } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 
 const themeGradients = {
   purple: `
-    radial-gradient(ellipse 100% 80% at 50% 0%, hsl(265, 90%, 55%, 0.4) 0%, transparent 55%),
-    radial-gradient(ellipse 80% 60% at 70% 20%, hsl(290, 85%, 50%, 0.3) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 50% at 25% 15%, hsl(320, 80%, 50%, 0.2) 0%, transparent 45%)
+    radial-gradient(ellipse 120% 100% at 50% -20%, hsl(265, 90%, 55%, 0.5) 0%, transparent 50%),
+    radial-gradient(ellipse 80% 60% at 80% 20%, hsl(290, 85%, 50%, 0.25) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 50% at 20% 30%, hsl(320, 80%, 50%, 0.15) 0%, transparent 45%)
   `,
   yellow: `
-    radial-gradient(ellipse 100% 80% at 50% 0%, hsl(42, 100%, 55%, 0.4) 0%, transparent 55%),
-    radial-gradient(ellipse 80% 60% at 70% 20%, hsl(28, 95%, 50%, 0.3) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 50% at 25% 15%, hsl(45, 90%, 50%, 0.2) 0%, transparent 45%)
+    radial-gradient(ellipse 120% 100% at 50% -20%, hsl(42, 100%, 55%, 0.5) 0%, transparent 50%),
+    radial-gradient(ellipse 80% 60% at 80% 20%, hsl(28, 95%, 50%, 0.25) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 50% at 20% 30%, hsl(45, 90%, 50%, 0.15) 0%, transparent 45%)
   `,
   blue: `
-    radial-gradient(ellipse 100% 80% at 50% 0%, hsl(215, 95%, 55%, 0.4) 0%, transparent 55%),
-    radial-gradient(ellipse 80% 60% at 70% 20%, hsl(235, 90%, 55%, 0.3) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 50% at 25% 15%, hsl(200, 90%, 50%, 0.2) 0%, transparent 45%)
+    radial-gradient(ellipse 120% 100% at 50% -20%, hsl(215, 95%, 55%, 0.5) 0%, transparent 50%),
+    radial-gradient(ellipse 80% 60% at 80% 20%, hsl(235, 90%, 55%, 0.25) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 50% at 20% 30%, hsl(200, 90%, 50%, 0.15) 0%, transparent 45%)
   `,
   green: `
-    radial-gradient(ellipse 100% 80% at 50% 0%, hsl(155, 80%, 45%, 0.4) 0%, transparent 55%),
-    radial-gradient(ellipse 80% 60% at 70% 20%, hsl(175, 75%, 40%, 0.3) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 50% at 25% 15%, hsl(140, 80%, 45%, 0.2) 0%, transparent 45%)
+    radial-gradient(ellipse 120% 100% at 50% -20%, hsl(155, 80%, 45%, 0.5) 0%, transparent 50%),
+    radial-gradient(ellipse 80% 60% at 80% 20%, hsl(175, 75%, 40%, 0.25) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 50% at 20% 30%, hsl(140, 80%, 45%, 0.15) 0%, transparent 45%)
   `,
 };
+
+const suggestions = [
+  { icon: Globe, text: "Landing page for my startup" },
+  { icon: Palette, text: "Portfolio for a designer" },
+  { icon: Code2, text: "SaaS dashboard interface" },
+  { icon: Rocket, text: "E-commerce product page" },
+];
 
 const HeroSection = () => {
   const [prompt, setPrompt] = useState("");
@@ -45,54 +52,59 @@ const HeroSection = () => {
     }
   };
 
+  const handleSuggestionClick = (text: string) => {
+    setPrompt(text);
+  };
+
   return (
-    <section className="relative min-h-[75vh] flex flex-col items-center justify-center overflow-hidden bg-background">
-      {/* Animated Background Gradient */}
+    <section className="relative min-h-[85vh] flex flex-col items-center justify-center overflow-hidden bg-background">
+      {/* Animated Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div 
           className="absolute inset-0 transition-all duration-700"
           style={{ background: themeGradients[themeColor] }}
         />
-        {/* Subtle grid pattern */}
+        {/* Animated grid */}
         <div 
-          className="absolute inset-0 opacity-[0.02]"
+          className="absolute inset-0 opacity-[0.03]"
           style={{
             backgroundImage: `linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)`,
-            backgroundSize: '64px 64px'
+            backgroundSize: '80px 80px'
           }}
         />
-        {/* Glow orbs */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[120px] animate-glow-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent/10 rounded-full blur-[100px] animate-glow-pulse" style={{ animationDelay: '1s' }} />
+        {/* Floating orbs */}
+        <div className="absolute top-1/3 left-1/5 w-[500px] h-[500px] bg-primary/8 rounded-full blur-[150px] animate-glow-pulse" />
+        <div className="absolute bottom-1/4 right-1/5 w-[400px] h-[400px] bg-accent/8 rounded-full blur-[120px] animate-glow-pulse" style={{ animationDelay: '1.5s' }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[180px]" />
       </div>
 
-      <div className="container-narrow relative z-10 flex flex-col items-center text-center pt-16 pb-8">
+      <div className="container-narrow relative z-10 flex flex-col items-center text-center px-4 py-12">
         {/* Badge */}
         <div 
-          className="floating-badge mb-8 animate-fade-in-down"
+          className="inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-medium animate-fade-in-down backdrop-blur-sm"
           style={{ animationDelay: "0.1s" }}
         >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Build with AI in seconds</span>
+          <Sparkles className="w-4 h-4" />
+          <span>Build with AI • Free to start</span>
         </div>
 
         {/* Main Title */}
         <h1 
-          className="text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-[1.05] mb-6 animate-fade-in tracking-tight"
+          className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-[1.1] mb-6 animate-fade-in tracking-tight"
           style={{ animationDelay: "0.2s" }}
         >
-          <span className="text-foreground">Describe it.</span>
+          <span className="text-foreground">What do you want</span>
           <br />
-          <span className="text-gradient-primary">Creali builds it.</span>
+          <span className="text-gradient-primary">to build today?</span>
         </h1>
 
         {/* Subtitle */}
         <p 
-          className="text-lg md:text-xl text-muted-foreground max-w-xl mb-12 animate-fade-in leading-relaxed"
+          className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-xl mb-10 animate-fade-in leading-relaxed"
           style={{ animationDelay: "0.3s" }}
         >
-          Create beautiful, production-ready websites in seconds with AI.
-          Just describe what you need.
+          Describe your vision in plain words. Creali transforms it into a beautiful, 
+          production-ready website in seconds.
         </p>
 
         {/* Premium Prompt Input Box */}
@@ -101,16 +113,28 @@ const HeroSection = () => {
           className="w-full max-w-2xl animate-fade-in"
           style={{ animationDelay: "0.4s" }}
         >
-          <div className={`input-premium ${isFocused ? 'shadow-glow' : ''}`}>
+          <div className={`relative rounded-2xl bg-card/80 backdrop-blur-xl border-2 transition-all duration-300 ${
+            isFocused 
+              ? 'border-primary/50 shadow-[0_0_40px_-10px_hsl(var(--primary)/0.4)]' 
+              : 'border-border/50 shadow-xl shadow-background/50'
+          }`}>
             {/* Text Input */}
-            <input
-              type="text"
+            <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
-              placeholder="Create a landing page for my SaaS startup..."
-              className="w-full bg-transparent border-0 px-6 py-5 text-foreground placeholder:text-muted-foreground focus:outline-none text-base md:text-lg"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (prompt.trim()) {
+                    handleSubmit(e);
+                  }
+                }
+              }}
+              placeholder="Describe your website... e.g., A modern landing page for a fitness app with dark theme"
+              className="w-full bg-transparent border-0 px-6 pt-5 pb-2 text-foreground placeholder:text-muted-foreground/70 focus:outline-none text-base resize-none min-h-[80px]"
+              rows={2}
             />
             
             {/* Bottom Actions */}
@@ -118,14 +142,14 @@ const HeroSection = () => {
               <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  className="flex items-center gap-2 px-3.5 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-xl transition-all duration-200"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-xl transition-all duration-200"
                 >
                   <Paperclip className="w-4 h-4" />
                   <span className="hidden sm:inline">Attach</span>
                 </button>
                 <button
                   type="button"
-                  className="flex items-center gap-2 px-3.5 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-xl transition-all duration-200"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-xl transition-all duration-200"
                 >
                   <Zap className="w-4 h-4" />
                   <span className="hidden sm:inline">Templates</span>
@@ -135,19 +159,54 @@ const HeroSection = () => {
               <button
                 type="submit"
                 disabled={!prompt.trim()}
-                className="group relative w-11 h-11 flex items-center justify-center rounded-xl overflow-hidden transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="group relative flex items-center gap-2 px-5 py-2.5 rounded-xl overflow-hidden transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <div className="absolute inset-0 bg-gradient-primary opacity-80 group-hover:opacity-100 transition-opacity" />
-                <ArrowUp className="relative z-10 w-5 h-5 text-primary-foreground group-hover:scale-110 transition-transform" />
+                <div className="absolute inset-0 bg-gradient-primary opacity-90 group-hover:opacity-100 transition-opacity" />
+                <span className="relative z-10 text-sm font-medium text-primary-foreground hidden sm:inline">Generate</span>
+                <ArrowUp className="relative z-10 w-4 h-4 text-primary-foreground group-hover:scale-110 transition-transform" />
               </button>
             </div>
           </div>
-
-          {/* Keyboard hint */}
-          <p className="text-xs text-muted-foreground/60 mt-4 text-center">
-            Press <kbd className="px-1.5 py-0.5 bg-muted rounded text-muted-foreground">Enter</kbd> to generate
-          </p>
         </form>
+
+        {/* Suggestions */}
+        <div 
+          className="flex flex-wrap items-center justify-center gap-2 mt-6 animate-fade-in"
+          style={{ animationDelay: "0.5s" }}
+        >
+          <span className="text-xs text-muted-foreground/60 mr-1">Try:</span>
+          {suggestions.map((suggestion, i) => (
+            <button
+              key={i}
+              onClick={() => handleSuggestionClick(suggestion.text)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground bg-muted/30 hover:bg-muted/50 rounded-lg border border-border/50 hover:border-primary/30 transition-all duration-200"
+            >
+              <suggestion.icon className="w-3 h-3" />
+              {suggestion.text}
+            </button>
+          ))}
+        </div>
+
+        {/* Stats */}
+        <div 
+          className="flex items-center justify-center gap-8 mt-12 pt-8 border-t border-border/30 animate-fade-in"
+          style={{ animationDelay: "0.6s" }}
+        >
+          <div className="text-center">
+            <div className="text-2xl font-bold text-foreground">10K+</div>
+            <div className="text-xs text-muted-foreground">Sites created</div>
+          </div>
+          <div className="w-px h-10 bg-border/50" />
+          <div className="text-center">
+            <div className="text-2xl font-bold text-foreground">&lt;30s</div>
+            <div className="text-xs text-muted-foreground">Average build time</div>
+          </div>
+          <div className="w-px h-10 bg-border/50" />
+          <div className="text-center">
+            <div className="text-2xl font-bold text-foreground">Free</div>
+            <div className="text-xs text-muted-foreground">To get started</div>
+          </div>
+        </div>
       </div>
     </section>
   );
