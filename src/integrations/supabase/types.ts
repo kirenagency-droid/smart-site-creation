@@ -14,6 +14,69 @@ export type Database = {
   }
   public: {
     Tables: {
+      credit_balances: {
+        Row: {
+          created_at: string
+          current_credits: number
+          id: string
+          last_daily_refill: string | null
+          last_monthly_reset: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_credits?: number
+          id?: string
+          last_daily_refill?: string | null
+          last_monthly_reset?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_credits?: number
+          id?: string
+          last_daily_refill?: string | null
+          last_monthly_reset?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      credit_logs: {
+        Row: {
+          action_type: string
+          amount: number
+          balance_after: number
+          created_at: string
+          description: string | null
+          id: string
+          metadata: Json | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          amount: number
+          balance_after: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          amount?: number
+          balance_after?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       custom_domains: {
         Row: {
           created_at: string
@@ -191,6 +254,51 @@ export type Database = {
         }
         Relationships: []
       }
+      plan_limits: {
+        Row: {
+          badge_removable: boolean
+          created_at: string
+          custom_domain_allowed: boolean
+          daily_credits: number
+          id: string
+          max_credit_pool: number
+          max_projects: number
+          monthly_credits: number
+          name: string
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          price_monthly: number
+          priority_level: number
+        }
+        Insert: {
+          badge_removable?: boolean
+          created_at?: string
+          custom_domain_allowed?: boolean
+          daily_credits?: number
+          id?: string
+          max_credit_pool?: number
+          max_projects?: number
+          monthly_credits?: number
+          name: string
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          price_monthly?: number
+          priority_level?: number
+        }
+        Update: {
+          badge_removable?: boolean
+          created_at?: string
+          custom_domain_allowed?: boolean
+          daily_credits?: number
+          id?: string
+          max_credit_pool?: number
+          max_projects?: number
+          monthly_credits?: number
+          name?: string
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          price_monthly?: number
+          priority_level?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -338,6 +446,9 @@ export type Database = {
           status: string
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
+          subscription_plan:
+            | Database["public"]["Enums"]["subscription_plan"]
+            | null
           updated_at: string
           user_id: string
         }
@@ -351,6 +462,9 @@ export type Database = {
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
+          subscription_plan?:
+            | Database["public"]["Enums"]["subscription_plan"]
+            | null
           updated_at?: string
           user_id: string
         }
@@ -364,6 +478,9 @@ export type Database = {
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
+          subscription_plan?:
+            | Database["public"]["Enums"]["subscription_plan"]
+            | null
           updated_at?: string
           user_id?: string
         }
@@ -375,6 +492,34 @@ export type Database = {
     }
     Functions: {
       can_use_custom_domain: { Args: { user_uuid: string }; Returns: boolean }
+      check_project_limit: {
+        Args: { user_uuid: string }
+        Returns: {
+          can_create: boolean
+          current_count: number
+          max_allowed: number
+        }[]
+      }
+      consume_credits: {
+        Args: {
+          action_description?: string
+          tokens_used: number
+          user_uuid: string
+        }
+        Returns: {
+          credits_consumed: number
+          error_message: string
+          remaining_credits: number
+          success: boolean
+        }[]
+      }
+      daily_credit_refill: {
+        Args: { user_uuid: string }
+        Returns: {
+          credits_added: number
+          new_balance: number
+        }[]
+      }
       deactivate_expired_domains: { Args: never; Returns: undefined }
       deduct_tokens: {
         Args: { amount: number; user_uuid: string }
@@ -384,9 +529,33 @@ export type Database = {
         Args: { project_id: string; project_name: string }
         Returns: string
       }
+      get_user_plan_limits: {
+        Args: { user_uuid: string }
+        Returns: {
+          badge_removable: boolean
+          custom_domain_allowed: boolean
+          daily_credits: number
+          max_credit_pool: number
+          max_projects: number
+          monthly_credits: number
+          name: string
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          priority_level: number
+        }[]
+      }
+      handle_subscription_downgrade: {
+        Args: { user_uuid: string }
+        Returns: undefined
+      }
     }
     Enums: {
-      [_ in never]: never
+      subscription_plan:
+        | "free"
+        | "pro"
+        | "pro_plus"
+        | "pro_max"
+        | "pro_ultra"
+        | "pro_extreme"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -513,6 +682,15 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      subscription_plan: [
+        "free",
+        "pro",
+        "pro_plus",
+        "pro_max",
+        "pro_ultra",
+        "pro_extreme",
+      ],
+    },
   },
 } as const

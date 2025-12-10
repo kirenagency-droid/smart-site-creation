@@ -1,12 +1,26 @@
 import { Link } from 'react-router-dom';
-import { Crown, Check, AlertCircle, CreditCard, Calendar, ArrowUpRight } from 'lucide-react';
+import { Crown, Check, AlertCircle, CreditCard, Calendar, ArrowUpRight, Zap, Rocket, Star, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useSubscription } from '@/hooks/useSubscription';
+import { Progress } from '@/components/ui/progress';
+import { useSubscription, SubscriptionPlan } from '@/hooks/useSubscription';
+import { useCredits } from '@/hooks/useCredits';
+
+const planDetails: Record<SubscriptionPlan, { name: string; icon: any; color: string; price: number }> = {
+  free: { name: 'Free', icon: Zap, color: 'text-muted-foreground', price: 0 },
+  pro: { name: 'Pro', icon: Zap, color: 'text-primary', price: 25 },
+  pro_plus: { name: 'Pro+', icon: Rocket, color: 'text-blue-500', price: 50 },
+  pro_max: { name: 'Pro Max', icon: Crown, color: 'text-purple-500', price: 100 },
+  pro_ultra: { name: 'Pro Ultra', icon: Star, color: 'text-yellow-500', price: 200 },
+  pro_extreme: { name: 'Pro Extreme', icon: Building2, color: 'text-red-500', price: 2250 },
+};
 
 export const SubscriptionPanel = () => {
-  const { subscription, loading, isPro, isAgency } = useSubscription();
+  const { subscription, loading: subLoading, canUseCustomDomain } = useSubscription();
+  const { credits, planLimits, loading: creditsLoading } = useCredits();
+
+  const loading = subLoading || creditsLoading;
 
   if (loading) {
     return (
@@ -18,18 +32,14 @@ export const SubscriptionPanel = () => {
     );
   }
 
-  const getPlanDisplay = () => {
-    switch (subscription?.plan) {
-      case 'pro':
-        return { name: 'Pro', color: 'text-primary', badge: 'default' as const };
-      case 'agency':
-        return { name: 'Agency', color: 'text-purple-500', badge: 'secondary' as const };
-      default:
-        return { name: 'Free', color: 'text-muted-foreground', badge: 'outline' as const };
-    }
-  };
+  const plan = subscription?.plan || 'free';
+  const details = planDetails[plan];
+  const Icon = details.icon;
 
-  const planDisplay = getPlanDisplay();
+  const maxPool = planLimits?.max_credit_pool || 5;
+  const dailyCredits = planLimits?.daily_credits || 0;
+  const percentUsed = Math.min((credits / maxPool) * 100, 100);
+  const isFree = plan === 'free';
 
   const getStatusDisplay = () => {
     switch (subscription?.status) {
@@ -56,18 +66,18 @@ export const SubscriptionPanel = () => {
             <CreditCard className="w-5 h-5 text-primary" />
             <CardTitle className="text-lg">Abonnement</CardTitle>
           </div>
-          <Badge variant={planDisplay.badge} className="gap-1">
-            {(isPro || isAgency) && <Crown className="w-3 h-3" />}
-            {planDisplay.name}
+          <Badge variant={isFree ? 'outline' : 'default'} className="gap-1">
+            <Icon className="w-3 h-3" />
+            {details.name}
           </Badge>
         </div>
         <CardDescription>
-          Gérez votre abonnement et accédez aux fonctionnalités premium
+          Gérez votre abonnement et vos crédits
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-6">
-        {/* Current Plan Info */}
+        {/* Current Plan & Status */}
         <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
           <div className="flex items-center justify-between mb-4">
             <span className="text-sm text-muted-foreground">Plan actuel</span>
@@ -75,8 +85,8 @@ export const SubscriptionPanel = () => {
           </div>
 
           <div className="flex items-baseline gap-2">
-            <span className={`text-3xl font-bold ${planDisplay.color}`}>
-              {subscription?.plan === 'free' ? '0€' : subscription?.plan === 'pro' ? '19€' : '49€'}
+            <span className={`text-3xl font-bold ${details.color}`}>
+              ${details.price}
             </span>
             <span className="text-muted-foreground">/mois</span>
           </div>
@@ -92,91 +102,86 @@ export const SubscriptionPanel = () => {
             <div className="mt-3 p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
               <p className="text-sm text-yellow-600 dark:text-yellow-400 flex items-center gap-2">
                 <AlertCircle className="w-4 h-4" />
-                Votre abonnement sera annulé à la fin de la période en cours
+                Votre abonnement sera annulé à la fin de la période
               </p>
             </div>
           )}
         </div>
 
-        {/* Plan Features */}
-        {subscription?.plan === 'free' ? (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-2">
-              <div className="flex items-center gap-2 text-sm">
-                <Check className="w-4 h-4 text-green-500" />
-                <span>Projets illimités</span>
+        {/* Credits Section */}
+        <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium">Crédits restants</span>
+            <span className="text-sm text-muted-foreground">{credits} / {maxPool}</span>
+          </div>
+          <Progress value={percentUsed} className="h-2 mb-3" />
+          
+          <div className="space-y-1 text-xs text-muted-foreground">
+            {!isFree && dailyCredits > 0 && (
+              <div className="flex items-center gap-2">
+                <Check className="w-3 h-3 text-green-500" />
+                <span>+{dailyCredits} crédits/jour</span>
               </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Check className="w-4 h-4 text-green-500" />
-                <span>1000 tokens offerts</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Check className="w-4 h-4 text-green-500" />
-                <span>Sous-domaine PenFlow gratuit</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <AlertCircle className="w-4 h-4" />
-                <span>Domaines personnalisés (Pro requis)</span>
-              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <Check className="w-3 h-3 text-green-500" />
+              <span>Pool maximum: {maxPool} crédits</span>
             </div>
+            {canUseCustomDomain && (
+              <div className="flex items-center gap-2">
+                <Check className="w-3 h-3 text-green-500" />
+                <span>Domaine personnalisé inclus</span>
+              </div>
+            )}
+          </div>
+        </div>
 
-            <Link to="/pricing">
+        {/* Plan Features */}
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="flex items-center gap-2">
+            <Check className={`w-4 h-4 ${canUseCustomDomain ? 'text-green-500' : 'text-muted-foreground'}`} />
+            <span className={!canUseCustomDomain ? 'text-muted-foreground' : ''}>Domaine perso</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Check className={`w-4 h-4 ${planLimits?.badge_removable ? 'text-green-500' : 'text-muted-foreground'}`} />
+            <span className={!planLimits?.badge_removable ? 'text-muted-foreground' : ''}>Sans badge</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-green-500" />
+            <span>{planLimits?.max_projects === -1 ? '∞' : planLimits?.max_projects} projets</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Check className={`w-4 h-4 ${(planLimits?.priority_level || 0) > 0 ? 'text-green-500' : 'text-muted-foreground'}`} />
+            <span className={(planLimits?.priority_level || 0) === 0 ? 'text-muted-foreground' : ''}>
+              Priorité {['Standard', 'Normale', 'Améliorée', 'Haute', 'Max', 'Ultra'][planLimits?.priority_level || 0]}
+            </span>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-3">
+          {isFree ? (
+            <Link to="/pricing" className="flex-1">
               <Button className="w-full gap-2">
                 <Crown className="w-4 h-4" />
                 Passer à Pro
-                <ArrowUpRight className="w-4 h-4" />
               </Button>
             </Link>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-2">
-              <div className="flex items-center gap-2 text-sm">
-                <Check className="w-4 h-4 text-green-500" />
-                <span>Tokens illimités</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Check className="w-4 h-4 text-green-500" />
-                <span>Domaines personnalisés</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Check className="w-4 h-4 text-green-500" />
-                <span>Certificat SSL automatique</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Check className="w-4 h-4 text-green-500" />
-                <span>Support prioritaire</span>
-              </div>
-              {isAgency && (
-                <>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span>5 membres d'équipe</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span>Marque blanche</span>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="flex gap-3">
+          ) : (
+            <>
               <Button variant="outline" className="flex-1">
                 Gérer l'abonnement
               </Button>
-              {isPro && (
-                <Link to="/pricing" className="flex-1">
-                  <Button variant="secondary" className="w-full">
-                    Passer à Agency
-                  </Button>
-                </Link>
-              )}
-            </div>
-          </div>
-        )}
+              <Link to="/pricing" className="flex-1">
+                <Button variant="secondary" className="w-full">
+                  Changer de plan
+                </Button>
+              </Link>
+            </>
+          )}
+        </div>
 
-        {/* Billing History Placeholder */}
+        {/* Billing History */}
         <div className="pt-4 border-t border-border/50">
           <Button variant="ghost" className="w-full justify-between text-muted-foreground hover:text-foreground">
             <span>Historique de facturation</span>
@@ -184,7 +189,7 @@ export const SubscriptionPanel = () => {
           </Button>
         </div>
 
-        {/* Payment Status Warning */}
+        {/* Warnings */}
         {subscription?.status === 'past_due' && (
           <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20">
             <div className="flex items-start gap-3">
@@ -192,7 +197,7 @@ export const SubscriptionPanel = () => {
               <div>
                 <p className="font-medium text-destructive">Paiement en retard</p>
                 <p className="text-sm text-destructive/80 mt-1">
-                  Votre paiement n'a pas pu être traité. Mettez à jour vos informations de paiement pour éviter l'interruption du service.
+                  Mettez à jour vos informations de paiement pour éviter l'interruption du service.
                 </p>
                 <Button variant="destructive" size="sm" className="mt-3">
                   Mettre à jour le paiement
@@ -202,7 +207,6 @@ export const SubscriptionPanel = () => {
           </div>
         )}
 
-        {/* Subscription Expired Warning */}
         {subscription?.status === 'expired' && (
           <div className="p-4 rounded-xl bg-muted border border-border">
             <div className="flex items-start gap-3">
@@ -210,11 +214,11 @@ export const SubscriptionPanel = () => {
               <div>
                 <p className="font-medium">Abonnement expiré</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Votre abonnement Pro a expiré. Vos domaines personnalisés ont été désactivés. Réactivez votre abonnement pour les restaurer.
+                  Votre abonnement a expiré. Vos domaines personnalisés ont été désactivés.
                 </p>
                 <Link to="/pricing">
                   <Button size="sm" className="mt-3">
-                    Réactiver Pro
+                    Réactiver
                   </Button>
                 </Link>
               </div>

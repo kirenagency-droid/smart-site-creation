@@ -1,5 +1,8 @@
 project_id = "gzlafreozttvkhbnpacm"
 
+[functions.subscription-webhook]
+verify_jwt = false
+
 [functions.generate-website]
 verify_jwt = false
 
