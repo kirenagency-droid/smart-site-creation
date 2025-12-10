@@ -80,26 +80,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     // Initial session check with auto-refresh
-    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
-      if (error || !session) {
-        // Try to refresh the session
-        const { data: refreshData } = await supabase.auth.refreshSession();
-        if (refreshData.session) {
-          setSession(refreshData.session);
-          setUser(refreshData.session.user);
-          fetchProfile(refreshData.session.user.id).then(setProfile);
+    const initializeSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error || !session) {
+          // Try to refresh the session
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError || !refreshData.session) {
+            // Session cannot be refreshed, clear state
+            setSession(null);
+            setUser(null);
+            setProfile(null);
+          } else {
+            setSession(refreshData.session);
+            setUser(refreshData.session.user);
+            fetchProfile(refreshData.session.user.id).then(setProfile);
+          }
         } else {
-          setSession(null);
-          setUser(null);
-          setProfile(null);
+          // Check if token is about to expire (within 5 minutes)
+          const expiresAt = session.expires_at;
+          const now = Math.floor(Date.now() / 1000);
+          const timeUntilExpiry = expiresAt ? expiresAt - now : 0;
+          
+          if (timeUntilExpiry < 300) {
+            // Token expires in less than 5 minutes, refresh it
+            const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+            if (!refreshError && refreshData.session) {
+              setSession(refreshData.session);
+              setUser(refreshData.session.user);
+              fetchProfile(refreshData.session.user.id).then(setProfile);
+            } else {
+              setSession(session);
+              setUser(session.user);
+              fetchProfile(session.user.id).then(setProfile);
+            }
+          } else {
+            setSession(session);
+            setUser(session.user);
+            fetchProfile(session.user.id).then(setProfile);
+          }
         }
-      } else {
-        setSession(session);
-        setUser(session.user);
-        fetchProfile(session.user.id).then(setProfile);
+      } catch (err) {
+        console.error('Session initialization error:', err);
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    };
+    
+    initializeSession();
 
     return () => subscription.unsubscribe();
   }, []);
