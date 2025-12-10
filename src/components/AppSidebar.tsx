@@ -3,7 +3,6 @@ import {
   Home, 
   Search, 
   LayoutGrid, 
-  Star, 
   Users, 
   Compass, 
   Layout, 
