@@ -479,6 +479,54 @@ export type Database = {
         }
         Relationships: []
       }
+      referrals: {
+        Row: {
+          created_at: string
+          credits_awarded: number | null
+          has_pro_subscription: boolean | null
+          has_published_site: boolean | null
+          id: string
+          qualified_at: string | null
+          referral_code: string
+          referred_email: string | null
+          referred_user_id: string | null
+          referrer_id: string
+          rewarded_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          credits_awarded?: number | null
+          has_pro_subscription?: boolean | null
+          has_published_site?: boolean | null
+          id?: string
+          qualified_at?: string | null
+          referral_code: string
+          referred_email?: string | null
+          referred_user_id?: string | null
+          referrer_id: string
+          rewarded_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          credits_awarded?: number | null
+          has_pro_subscription?: boolean | null
+          has_published_site?: boolean | null
+          id?: string
+          qualified_at?: string | null
+          referral_code?: string
+          referred_email?: string | null
+          referred_user_id?: string | null
+          referrer_id?: string
+          rewarded_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           cancel_at_period_end: boolean | null
@@ -536,6 +584,10 @@ export type Database = {
     }
     Functions: {
       can_use_custom_domain: { Args: { user_uuid: string }; Returns: boolean }
+      check_and_reward_referral: {
+        Args: { referred_uuid: string }
+        Returns: boolean
+      }
       check_project_limit: {
         Args: { user_uuid: string }
         Returns: {
@@ -573,6 +625,10 @@ export type Database = {
         Args: { project_id: string; project_name: string }
         Returns: string
       }
+      get_or_create_referral_code: {
+        Args: { user_uuid: string }
+        Returns: string
+      }
       get_user_plan_limits: {
         Args: { user_uuid: string }
         Returns: {
@@ -590,6 +646,14 @@ export type Database = {
       handle_subscription_downgrade: {
         Args: { user_uuid: string }
         Returns: undefined
+      }
+      link_referral: {
+        Args: {
+          new_user_email: string
+          new_user_uuid: string
+          referral_code_param: string
+        }
+        Returns: boolean
       }
     }
     Enums: {

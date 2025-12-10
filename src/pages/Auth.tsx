@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, ArrowUp } from 'lucide-react';
+import { Loader2, ArrowUp, Gift } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(false);
@@ -15,6 +16,17 @@ const Auth = () => {
   const [step, setStep] = useState<'email' | 'password'>('email');
   const { user, signIn, signUp } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  
+  // Capture referral code from URL
+  const referralCode = searchParams.get('ref');
+
+  useEffect(() => {
+    // Store referral code in localStorage if present
+    if (referralCode) {
+      localStorage.setItem('referral_code', referralCode);
+    }
+  }, [referralCode]);
 
   useEffect(() => {
     if (user) {
@@ -26,6 +38,31 @@ const Auth = () => {
     e.preventDefault();
     if (email.trim()) {
       setStep('password');
+    }
+  };
+
+  const linkReferral = async (userId: string, userEmail: string) => {
+    const storedCode = localStorage.getItem('referral_code');
+    if (!storedCode) return;
+
+    try {
+      const { data, error } = await supabase.rpc('link_referral', {
+        referral_code_param: storedCode,
+        new_user_uuid: userId,
+        new_user_email: userEmail
+      });
+
+      if (!error && data) {
+        toast({
+          title: "Parrainage activé ! 🎁",
+          description: "Vous avez été parrainé. Publiez un site et passez Pro pour offrir 10 crédits à votre parrain !",
+        });
+      }
+      
+      // Clear the stored referral code
+      localStorage.removeItem('referral_code');
+    } catch (error) {
+      console.error('Error linking referral:', error);
     }
   };
 
@@ -69,9 +106,15 @@ const Auth = () => {
             });
           }
         } else {
+          // Get the newly created user session
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (sessionData?.session?.user?.id) {
+            await linkReferral(sessionData.session.user.id, email);
+          }
+          
           toast({
             title: "Compte créé ! 🎉",
-            description: "Vous avez reçu 1000 tokens gratuits pour commencer !",
+            description: "Vous avez reçu 5 crédits gratuits pour commencer !",
           });
           navigate('/');
         }
@@ -90,6 +133,16 @@ const Auth = () => {
           <div className="mb-12">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-400 via-pink-500 to-purple-600" />
           </div>
+
+          {/* Referral Banner */}
+          {referralCode && !isLogin && (
+            <div className="mb-6 p-4 bg-primary/10 border border-primary/20 rounded-xl flex items-center gap-3">
+              <Gift className="w-5 h-5 text-primary shrink-0" />
+              <p className="text-sm text-foreground">
+                Vous avez été invité ! Créez votre compte pour profiter de Creali.
+              </p>
+            </div>
+          )}
 
           {/* Title */}
           <h1 className="text-3xl font-bold text-foreground mb-8">
