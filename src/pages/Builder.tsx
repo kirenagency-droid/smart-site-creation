@@ -13,13 +13,16 @@ import { StreamingThinking } from '@/components/builder/StreamingThinking';
 import { useStreamingGeneration } from '@/hooks/useStreamingGeneration';
 import { ComponentPickerButton } from '@/components/builder/ComponentPicker';
 import { ComponentVariant } from '@/lib/componentLibrary';
+import { CreditsWidget } from '@/components/subscription/CreditsDashboard';
+import { LowCreditsAlert } from '@/components/subscription/LowCreditsAlert';
+import { UpgradeModal } from '@/components/subscription/UpgradeModal';
+import { useCredits } from '@/hooks/useCredits';
 import { 
   Sparkles, 
   Send, 
   Loader2, 
   Download, 
   ExternalLink,
-  Coins,
   ArrowLeft,
   Code,
   Eye,
@@ -30,7 +33,8 @@ import {
   Smartphone,
   Tablet,
   Monitor,
-  StopCircle
+  StopCircle,
+  Crown
 } from 'lucide-react';
 
 type DevicePreview = 'desktop' | 'tablet' | 'mobile';
@@ -54,6 +58,7 @@ const Builder = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const { user, profile, loading, refreshProfile } = useAuth();
   const navigate = useNavigate();
+  const { credits, planLimits, consumeCredits, refreshCredits } = useCredits();
   
   const [project, setProject] = useState<Project | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -66,6 +71,7 @@ const Builder = () => {
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [devicePreview, setDevicePreview] = useState<DevicePreview>('desktop');
   const [useStreaming, setUseStreaming] = useState(true);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -185,15 +191,11 @@ const Builder = () => {
   };
 
   const handleSend = async () => {
-    if (!inputValue.trim() || isGenerating || !user || !profile) return;
+    if (!inputValue.trim() || isGenerating || !user) return;
 
-    // Check tokens
-    if (profile.plan === 'free' && profile.token_balance < 5) {
-      toast({
-        title: "Plus de tokens",
-        description: "Passez au plan Pro pour continuer à générer des sites",
-        variant: "destructive",
-      });
+    // Check credits
+    if (credits < 1) {
+      setShowUpgradeModal(true);
       return;
     }
 
@@ -321,7 +323,9 @@ const Builder = () => {
     }
   };
 
-  const canSend = profile && (profile.plan !== 'free' || profile.token_balance >= 5);
+  const canSend = credits >= 1;
+  const isFree = planLimits?.plan === 'free';
+  const isLowCredits = credits <= 2;
   const isStreaming = streaming.isStreaming;
   const currentPhase = isStreaming ? streaming.phase : phase;
 
@@ -350,13 +354,8 @@ const Builder = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Token Display */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 border border-border">
-            <Coins className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium">
-              {profile?.token_balance ?? 0} / 1000
-            </span>
-          </div>
+          {/* Credits Widget */}
+          <CreditsWidget />
 
           {/* Publish Button */}
           <Button 
@@ -376,11 +375,14 @@ const Builder = () => {
             </Button>
           </Link>
 
-          <Link to="/pricing">
-            <Button variant="outline" size="sm">
-              Mettre à niveau
-            </Button>
-          </Link>
+          {isFree && (
+            <Link to="/pricing">
+              <Button size="sm" className="gap-2">
+                <Crown className="w-4 h-4" />
+                Pro
+              </Button>
+            </Link>
+          )}
         </div>
       </header>
 
@@ -467,14 +469,14 @@ const Builder = () => {
 
             {/* Input Area */}
             <div className="p-4 border-t border-border/50">
-              {!canSend && (
-                <div className="mb-3 p-3 rounded-xl bg-destructive/10 border border-destructive/20">
-                  <p className="text-sm text-destructive font-medium">
-                    Tu as utilisé tous tes tokens gratuits
-                  </p>
-                  <Link to="/pricing" className="text-xs text-primary hover:underline">
-                    Voir les offres →
-                  </Link>
+              {/* Low Credits Alert */}
+              {isLowCredits && (
+                <div className="mb-3">
+                  <LowCreditsAlert 
+                    credits={credits} 
+                    maxCredits={planLimits?.max_credit_pool || 5}
+                    planName={planLimits?.name || 'Free'}
+                  />
                 </div>
               )}
 
@@ -733,6 +735,14 @@ const Builder = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Upgrade Modal */}
+      {showUpgradeModal && (
+        <UpgradeModal 
+          reason="no_credits"
+          onClose={() => setShowUpgradeModal(false)} 
+        />
       )}
     </div>
   );

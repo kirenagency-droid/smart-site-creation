@@ -61,9 +61,9 @@ export const useCredits = (): UseCreditsReturn => {
         .from('credit_balances')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (balanceError && balanceError.code !== 'PGRST116') {
+      if (balanceError) {
         console.error('Error fetching credit balance:', balanceError);
       }
 
@@ -75,10 +75,12 @@ export const useCredits = (): UseCreditsReturn => {
           .from('credit_balances')
           .insert({ user_id: user.id, current_credits: 5 })
           .select()
-          .single();
+          .maybeSingle();
         
         if (newBalance) {
           setCredits(newBalance.current_credits);
+        } else {
+          setCredits(5);
         }
       }
 
