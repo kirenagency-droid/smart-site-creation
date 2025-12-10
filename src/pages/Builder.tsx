@@ -151,14 +151,15 @@ const Builder = () => {
 
   // Auto-trigger generation if initial prompt is provided from navigation
   useEffect(() => {
-    const initialPrompt = (location.state as { initialPrompt?: string })?.initialPrompt;
-    
+    const initialPrompt = (location.state as {
+      initialPrompt?: string;
+    })?.initialPrompt;
     if (initialPrompt && project && !isLoadingProject && !initialPromptProcessed && credits >= 1 && !isGenerating) {
       setInitialPromptProcessed(true);
-      
+
       // Clear the location state to prevent re-triggering
       window.history.replaceState({}, document.title);
-      
+
       // Add user message to UI
       const tempUserMessage: Message = {
         id: `temp-${Date.now()}`,
@@ -168,19 +169,11 @@ const Builder = () => {
       };
       setMessages(prev => [...prev, tempUserMessage]);
       setIsGenerating(true);
-      
+
       // Start streaming generation
-      streaming.startGeneration(
-        projectId!,
-        initialPrompt,
-        project?.current_html || null,
-        project?.site_structure || {},
-        null,
-        []
-      );
+      streaming.startGeneration(projectId!, initialPrompt, project?.current_html || null, project?.site_structure || {}, null, []);
     }
   }, [project, isLoadingProject, location.state, initialPromptProcessed, credits, isGenerating, projectId, streaming]);
-
   const fetchProject = async () => {
     const {
       data,
@@ -476,9 +469,7 @@ const Builder = () => {
                   </div>
                   
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">
-                      {profile?.token_balance ?? 0} tokens
-                    </span>
+                    
                     
                     {isGenerating ? <Button onClick={handleStopGeneration} size="sm" variant="destructive" className="rounded-full h-8 w-8 p-0">
                         <StopCircle className="w-4 h-4" />
