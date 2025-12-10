@@ -11,6 +11,7 @@ import Projects from "./pages/Projects";
 import Builder from "./pages/Builder";
 import Pricing from "./pages/Pricing";
 import Settings from "./pages/Settings";
+import Referral from "./pages/Referral";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import CheckoutCancel from "./pages/CheckoutCancel";
 import NotFound from "./pages/NotFound";
@@ -32,6 +33,7 @@ const App = () => (
               <Route path="/app/:projectId" element={<Builder />} />
               <Route path="/pricing" element={<Pricing />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/referral" element={<Referral />} />
               <Route path="/checkout-success" element={<CheckoutSuccess />} />
               <Route path="/checkout-cancel" element={<CheckoutCancel />} />
               <Route path="*" element={<NotFound />} />

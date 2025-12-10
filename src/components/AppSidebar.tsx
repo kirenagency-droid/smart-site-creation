@@ -278,10 +278,13 @@ export function AppSidebar() {
       {!collapsed && (
         <SidebarFooter className="p-3 space-y-2.5">
           {/* Share Card */}
-          <button className="group w-full flex items-center justify-between px-4 py-3.5 bg-secondary/40 hover:bg-secondary/60 rounded-xl transition-all duration-200 border border-transparent hover:border-border/50">
+          <button 
+            onClick={() => navigate('/referral')}
+            className="group w-full flex items-center justify-between px-4 py-3.5 bg-secondary/40 hover:bg-secondary/60 rounded-xl transition-all duration-200 border border-transparent hover:border-border/50"
+          >
             <div className="text-left">
-              <p className="text-sm font-semibold text-foreground">Share Creali</p>
-              <p className="text-xs text-muted-foreground">Get 10 credits each</p>
+              <p className="text-sm font-semibold text-foreground">Partager Creali</p>
+              <p className="text-xs text-muted-foreground">Gagne 10 crédits</p>
             </div>
             <div className="w-10 h-10 flex items-center justify-center bg-background/60 rounded-xl">
               <Gift className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
