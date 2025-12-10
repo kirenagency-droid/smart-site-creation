@@ -1,52 +1,17 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUp, Paperclip, Sparkles, Zap, Globe, Palette, Code2, Rocket, Loader2 } from "lucide-react";
+import { ArrowRight, Command, Globe, Layers, Zap, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
-const themeGradients = {
-  purple: `
-    radial-gradient(ellipse 120% 100% at 50% -20%, hsl(265, 90%, 55%, 0.5) 0%, transparent 50%),
-    radial-gradient(ellipse 80% 60% at 80% 20%, hsl(290, 85%, 50%, 0.25) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 50% at 20% 30%, hsl(320, 80%, 50%, 0.15) 0%, transparent 45%)
-  `,
-  yellow: `
-    radial-gradient(ellipse 120% 100% at 50% -20%, hsl(42, 100%, 55%, 0.5) 0%, transparent 50%),
-    radial-gradient(ellipse 80% 60% at 80% 20%, hsl(28, 95%, 50%, 0.25) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 50% at 20% 30%, hsl(45, 90%, 50%, 0.15) 0%, transparent 45%)
-  `,
-  blue: `
-    radial-gradient(ellipse 120% 100% at 50% -20%, hsl(215, 95%, 55%, 0.5) 0%, transparent 50%),
-    radial-gradient(ellipse 80% 60% at 80% 20%, hsl(235, 90%, 55%, 0.25) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 50% at 20% 30%, hsl(200, 90%, 50%, 0.15) 0%, transparent 45%)
-  `,
-  green: `
-    radial-gradient(ellipse 120% 100% at 50% -20%, hsl(155, 80%, 45%, 0.5) 0%, transparent 50%),
-    radial-gradient(ellipse 80% 60% at 80% 20%, hsl(175, 75%, 40%, 0.25) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 50% at 20% 30%, hsl(140, 80%, 45%, 0.15) 0%, transparent 45%)
-  `,
-};
-
 const suggestions = [
-  { icon: Globe, text: "Landing page for my startup" },
-  { icon: Palette, text: "Portfolio for a designer" },
-  { icon: Code2, text: "SaaS dashboard interface" },
-  { icon: Rocket, text: "E-commerce product page" },
+  { icon: Globe, text: "Landing page for startup", tag: "POPULAR" },
+  { icon: Layers, text: "Portfolio website", tag: "NEW" },
+  { icon: Zap, text: "SaaS product page", tag: null },
 ];
 
-// Floating particles configuration
-const particles = Array.from({ length: 20 }, (_, i) => ({
-  id: i,
-  size: Math.random() * 4 + 2,
-  x: Math.random() * 100,
-  delay: Math.random() * 15,
-  duration: Math.random() * 10 + 15,
-  opacity: Math.random() * 0.5 + 0.1,
-}));
-
-// Extract a meaningful project name from the prompt
 const extractProjectName = (prompt: string): string => {
   const lowerPrompt = prompt.toLowerCase();
   
@@ -54,9 +19,7 @@ const extractProjectName = (prompt: string): string => {
     'landing page', 'portfolio', 'dashboard', 'e-commerce', 'ecommerce', 'shop', 'store',
     'blog', 'website', 'site', 'app', 'application', 'saas', 'startup', 'agency',
     'restaurant', 'coach', 'fitness', 'gym', 'yoga', 'spa', 'hotel', 'travel',
-    'photography', 'music', 'gaming', 'crypto', 'nft', 'real estate', 'immobilier',
-    'avocat', 'lawyer', 'doctor', 'médecin', 'dentist', 'clinic', 'clinique',
-    'école', 'school', 'formation', 'course', 'food', 'delivery', 'livraison'
+    'photography', 'music', 'gaming', 'crypto', 'nft', 'real estate', 'immobilier'
   ];
   
   for (const keyword of keywords) {
@@ -82,14 +45,14 @@ const extractProjectName = (prompt: string): string => {
   }
   
   const words = prompt.split(/\s+/).filter(w => w.length > 3);
-  const skipWords = ['create', 'make', 'build', 'crée', 'fais', 'créer', 'faire', 'pour', 'with', 'avec', 'modern', 'moderne', 'landing', 'page', 'site', 'website'];
+  const skipWords = ['create', 'make', 'build', 'crée', 'fais', 'créer', 'faire', 'pour', 'with', 'avec'];
   const significantWord = words.find(w => !skipWords.includes(w.toLowerCase()));
   
   if (significantWord) {
     return significantWord.charAt(0).toUpperCase() + significantWord.slice(1).toLowerCase();
   }
   
-  return "Nouveau projet";
+  return "New Project";
 };
 
 const HeroSection = () => {
@@ -102,7 +65,8 @@ const HeroSection = () => {
   const { themeColor } = useTheme();
 
   useEffect(() => {
-    setMounted(true);
+    const timer = setTimeout(() => setMounted(true), 100);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -132,8 +96,8 @@ const HeroSection = () => {
       if (error) throw error;
 
       toast({
-        title: "Projet créé !",
-        description: `${projectName} - Génération en cours...`,
+        title: "Project created",
+        description: `${projectName} — generating...`,
       });
 
       navigate(`/app/${project.id}`, { state: { initialPrompt: prompt } });
@@ -141,8 +105,8 @@ const HeroSection = () => {
     } catch (error) {
       console.error('Error creating project:', error);
       toast({
-        title: "Erreur",
-        description: "Impossible de créer le projet",
+        title: "Error",
+        description: "Failed to create project",
         variant: "destructive"
       });
     } finally {
@@ -155,192 +119,198 @@ const HeroSection = () => {
   };
 
   return (
-    <section className="relative min-h-[85vh] flex flex-col items-center justify-center overflow-hidden bg-background">
-      {/* Animated Background */}
+    <section className="relative min-h-[90vh] flex flex-col items-center justify-center overflow-hidden bg-background grain">
+      {/* Background elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* Gradient orb */}
         <div 
-          className="absolute inset-0 transition-all duration-1000"
-          style={{ background: themeGradients[themeColor] }}
-        />
-        
-        {/* Animated grid with fade effect */}
-        <div 
-          className="absolute inset-0 opacity-[0.02]"
+          className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] opacity-30"
           style={{
-            backgroundImage: `linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)`,
-            backgroundSize: '60px 60px',
-            maskImage: 'radial-gradient(ellipse 80% 50% at 50% 50%, black, transparent)'
+            background: `radial-gradient(ellipse 100% 100% at 50% 0%, hsl(var(--primary) / 0.2) 0%, transparent 70%)`
           }}
         />
         
-        {/* Floating orbs with morphing animation */}
-        <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-primary/10 rounded-full blur-[150px] animate-morph animate-glow-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-accent/10 rounded-full blur-[120px] animate-morph animate-glow-pulse" style={{ animationDelay: '2s' }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/5 rounded-full blur-[200px] animate-spin-slow" />
+        {/* Grid pattern */}
+        <div 
+          className="absolute inset-0 opacity-[0.015]"
+          style={{
+            backgroundImage: `
+              linear-gradient(hsl(var(--foreground)) 1px, transparent 1px),
+              linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)
+            `,
+            backgroundSize: '100px 100px'
+          }}
+        />
         
-        {/* Floating particles */}
-        {mounted && particles.map((particle) => (
-          <div
-            key={particle.id}
-            className="absolute rounded-full bg-primary/30 animate-particle-float"
-            style={{
-              width: particle.size,
-              height: particle.size,
-              left: `${particle.x}%`,
-              animationDelay: `${particle.delay}s`,
-              animationDuration: `${particle.duration}s`,
-              opacity: particle.opacity,
-            }}
-          />
-        ))}
+        {/* Accent lines */}
+        <div className="absolute top-1/4 left-0 w-full h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+        <div className="absolute bottom-1/3 left-0 w-full h-px bg-gradient-to-r from-transparent via-accent/10 to-transparent" />
       </div>
 
-      <div className="container-narrow relative z-10 flex flex-col items-center text-center px-4 py-12">
-        {/* Badge with bounce animation */}
+      <div className="container-narrow relative z-10 flex flex-col items-center text-center px-6 py-16">
+        {/* Version badge */}
         <div 
-          className={`inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-medium backdrop-blur-sm transition-all duration-700 ${
+          className={`inline-flex items-center gap-2 px-3 py-1.5 mb-12 rounded-full text-xs font-mono uppercase tracking-widest transition-all duration-700 ${
             mounted ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'
           }`}
-          style={{ transitionDelay: '0.1s' }}
+          style={{ 
+            background: 'hsl(var(--primary) / 0.08)',
+            color: 'hsl(var(--primary))',
+            border: '1px solid hsl(var(--primary) / 0.15)'
+          }}
         >
-          <Sparkles className="w-4 h-4 animate-bounce-subtle" />
-          <span>Build with AI • Free to start</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+          <span>v2.0 — AI Powered</span>
         </div>
 
-        {/* Main Title with staggered word reveal */}
-        <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-[1.1] mb-10 tracking-tight overflow-hidden">
+        {/* Main heading */}
+        <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold leading-[0.95] tracking-tight mb-8">
           <span className="block overflow-hidden">
             <span 
-              className={`inline-block text-foreground transition-all duration-700 ${
+              className={`block transition-all duration-700 ease-out ${
                 mounted ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'
               }`}
-              style={{ transitionDelay: '0.2s' }}
+              style={{ transitionDelay: '0.15s' }}
             >
-              What do you want
+              <span className="text-foreground">Build</span>
             </span>
           </span>
           <span className="block overflow-hidden">
             <span 
-              className={`inline-block text-gradient-primary transition-all duration-700 ${
+              className={`block transition-all duration-700 ease-out ${
+                mounted ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'
+              }`}
+              style={{ transitionDelay: '0.25s' }}
+            >
+              <span className="text-gradient-primary">websites</span>
+            </span>
+          </span>
+          <span className="block overflow-hidden">
+            <span 
+              className={`block transition-all duration-700 ease-out ${
                 mounted ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'
               }`}
               style={{ transitionDelay: '0.35s' }}
             >
-              to build today?
+              <span className="text-muted-foreground/60">with AI</span>
             </span>
           </span>
         </h1>
 
-        {/* Premium Prompt Input Box with blur-in animation */}
+        {/* Subheading */}
+        <p 
+          className={`text-lg text-muted-foreground max-w-md mb-12 leading-relaxed transition-all duration-700 ${
+            mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+          }`}
+          style={{ transitionDelay: '0.45s' }}
+        >
+          Describe what you want. Get a production-ready website in seconds.
+        </p>
+
+        {/* Input area */}
         <form 
           onSubmit={handleSubmit}
-          className={`w-full max-w-2xl transition-all duration-700 ${
-            mounted ? 'opacity-100 translate-y-0 blur-0' : 'opacity-0 translate-y-8 blur-sm'
+          className={`w-full max-w-xl transition-all duration-700 ${
+            mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
           }`}
-          style={{ transitionDelay: '0.5s' }}
+          style={{ transitionDelay: '0.55s' }}
         >
-          <div className={`relative rounded-2xl bg-card/80 backdrop-blur-xl border-2 transition-all duration-500 ${
-            isFocused 
-              ? 'border-primary/50 shadow-[0_0_60px_-10px_hsl(var(--primary)/0.5)] scale-[1.02]' 
-              : 'border-border/50 shadow-xl shadow-background/50 hover:border-border hover:shadow-2xl'
-          }`}>
-            {/* Animated border beam effect when focused */}
-            {isFocused && (
-              <div className="absolute -inset-[1px] rounded-2xl overflow-hidden pointer-events-none">
-                <div className="absolute w-20 h-20 bg-primary/60 blur-xl animate-spin-slow" 
-                  style={{ 
-                    offsetPath: 'rect(0 100% 100% 0 round 1rem)', 
-                    animation: 'border-beam 4s linear infinite'
-                  }} 
+          <div 
+            className={`relative rounded-xl transition-all duration-300 ${
+              isFocused 
+                ? 'ring-2 ring-primary/30 ring-offset-2 ring-offset-background' 
+                : ''
+            }`}
+          >
+            <div className="relative bg-card border border-border rounded-xl overflow-hidden">
+              {/* Input */}
+              <div className="flex items-center gap-3 px-4 py-4">
+                <Command className="w-5 h-5 text-muted-foreground shrink-0" />
+                <input
+                  type="text"
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  onFocus={() => setIsFocused(true)}
+                  onBlur={() => setIsFocused(false)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey && prompt.trim() && !isCreating) {
+                      e.preventDefault();
+                      handleSubmit(e);
+                    }
+                  }}
+                  placeholder="What do you want to build?"
+                  className="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground/50 focus:outline-none text-base"
+                  disabled={isCreating}
                 />
-              </div>
-            )}
-            
-            {/* Text Input */}
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  if (prompt.trim() && !isCreating) {
-                    handleSubmit(e);
-                  }
-                }
-              }}
-              placeholder="Describe your website... e.g., A modern landing page for a fitness app with dark theme"
-              className="w-full bg-transparent border-0 px-6 pt-5 pb-2 text-foreground placeholder:text-muted-foreground/60 focus:outline-none text-base resize-none min-h-[80px] transition-all"
-              rows={2}
-              disabled={isCreating}
-            />
-            
-            {/* Bottom Actions */}
-            <div className="flex items-center justify-between px-4 pb-4">
-              <div className="flex items-center gap-1">
                 <button
-                  type="button"
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-xl transition-all duration-200 hover:scale-105"
-                  disabled={isCreating}
+                  type="submit"
+                  disabled={!prompt.trim() || isCreating}
+                  className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed bg-primary text-primary-foreground hover:brightness-110"
                 >
-                  <Paperclip className="w-4 h-4" />
-                  <span className="hidden sm:inline">Attach</span>
-                </button>
-                <button
-                  type="button"
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-xl transition-all duration-200 hover:scale-105"
-                  disabled={isCreating}
-                >
-                  <Zap className="w-4 h-4" />
-                  <span className="hidden sm:inline">Templates</span>
+                  {isCreating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <span>Generate</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
                 </button>
               </div>
-              
-              <button
-                type="submit"
-                disabled={!prompt.trim() || isCreating}
-                className="group relative flex items-center gap-2 px-5 py-2.5 rounded-xl overflow-hidden transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
-              >
-                <div className="absolute inset-0 bg-gradient-primary opacity-90 group-hover:opacity-100 transition-all duration-300" />
-                <div className="absolute inset-0 bg-gradient-primary opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300" />
-                {isCreating ? (
-                  <Loader2 className="relative z-10 w-4 h-4 text-primary-foreground animate-spin" />
-                ) : (
-                  <>
-                    <span className="relative z-10 text-sm font-medium text-primary-foreground hidden sm:inline">Generate</span>
-                    <ArrowUp className="relative z-10 w-4 h-4 text-primary-foreground group-hover:-translate-y-0.5 transition-transform" />
-                  </>
-                )}
-              </button>
             </div>
           </div>
-        </form>
 
-        {/* Suggestions with staggered animation */}
-        <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
-          <span 
-            className={`text-xs text-muted-foreground/60 mr-1 transition-all duration-500 ${
+          {/* Suggestions */}
+          <div 
+            className={`flex flex-wrap items-center justify-center gap-2 mt-6 transition-all duration-700 ${
               mounted ? 'opacity-100' : 'opacity-0'
             }`}
             style={{ transitionDelay: '0.7s' }}
           >
-            Try:
-          </span>
-          {suggestions.map((suggestion, i) => (
-            <button
-              key={i}
-              onClick={() => handleSuggestionClick(suggestion.text)}
-              disabled={isCreating}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground bg-muted/30 hover:bg-muted/50 rounded-lg border border-border/50 hover:border-primary/30 transition-all duration-300 disabled:opacity-50 hover:scale-105 hover:-translate-y-0.5 ${
-                mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
-              }`}
-              style={{ transitionDelay: `${0.75 + i * 0.1}s` }}
-            >
-              <suggestion.icon className="w-3 h-3" />
-              {suggestion.text}
-            </button>
-          ))}
+            {suggestions.map((suggestion, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => handleSuggestionClick(suggestion.text)}
+                disabled={isCreating}
+                className={`group flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground bg-secondary/50 hover:bg-secondary rounded-lg border border-transparent hover:border-border transition-all duration-200 disabled:opacity-50 ${
+                  mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+                }`}
+                style={{ transitionDelay: `${0.75 + i * 0.08}s` }}
+              >
+                <suggestion.icon className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                <span>{suggestion.text}</span>
+                {suggestion.tag && (
+                  <span className="px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded bg-primary/10 text-primary">
+                    {suggestion.tag}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </form>
+
+        {/* Stats row */}
+        <div 
+          className={`flex items-center gap-8 mt-16 text-sm transition-all duration-700 ${
+            mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+          }`}
+          style={{ transitionDelay: '0.9s' }}
+        >
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <span className="font-mono text-foreground">2.5K+</span>
+            <span>sites built</span>
+          </div>
+          <div className="w-px h-4 bg-border" />
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <span className="font-mono text-foreground">&lt;30s</span>
+            <span>avg. build</span>
+          </div>
+          <div className="w-px h-4 bg-border" />
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <span className="font-mono text-primary">Free</span>
+            <span>to start</span>
+          </div>
         </div>
       </div>
     </section>
