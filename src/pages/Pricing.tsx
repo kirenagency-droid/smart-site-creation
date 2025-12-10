@@ -49,6 +49,14 @@ const Pricing = () => {
 
     setIsLoading(true);
     try {
+      // Refresh session to ensure valid JWT
+      const { data: sessionData, error: sessionError } = await supabase.auth.refreshSession();
+      if (sessionError || !sessionData.session) {
+        toast.error('Session expirée. Veuillez vous reconnecter.');
+        navigate('/auth');
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: { priceId: selectedTier.priceId },
       });
@@ -57,9 +65,14 @@ const Pricing = () => {
       if (!data?.url) throw new Error('No checkout URL received');
 
       window.open(data.url, '_blank');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Checkout error:', error);
-      toast.error('Erreur lors de la création du checkout');
+      if (error?.message?.includes('JWT') || error?.message?.includes('401')) {
+        toast.error('Session expirée. Veuillez vous reconnecter.');
+        navigate('/auth');
+      } else {
+        toast.error('Erreur lors de la création du checkout');
+      }
     } finally {
       setIsLoading(false);
     }

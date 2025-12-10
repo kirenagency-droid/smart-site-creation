@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Crown, Check, AlertCircle, CreditCard, Calendar, ArrowUpRight, Zap, Rocket, Star, Building2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +20,7 @@ const planDetails: Record<SubscriptionPlan, { name: string; icon: any; color: st
 };
 
 export const SubscriptionPanel = () => {
+  const navigate = useNavigate();
   const [portalLoading, setPortalLoading] = useState(false);
   const { subscription, loading: subLoading, canUseCustomDomain } = useSubscription();
   const { credits, planLimits, loading: creditsLoading } = useCredits();
@@ -27,6 +28,14 @@ export const SubscriptionPanel = () => {
   const handleManageSubscription = async () => {
     setPortalLoading(true);
     try {
+      // Refresh session to ensure valid JWT
+      const { data: sessionData, error: sessionError } = await supabase.auth.refreshSession();
+      if (sessionError || !sessionData.session) {
+        toast.error('Session expirée. Veuillez vous reconnecter.');
+        navigate('/auth');
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('customer-portal');
       
       if (error) throw error;
@@ -37,7 +46,12 @@ export const SubscriptionPanel = () => {
       }
     } catch (error: any) {
       console.error('Customer portal error:', error);
-      toast.error(error.message || 'Erreur lors de l\'ouverture du portail');
+      if (error?.message?.includes('JWT') || error?.message?.includes('401')) {
+        toast.error('Session expirée. Veuillez vous reconnecter.');
+        navigate('/auth');
+      } else {
+        toast.error(error.message || 'Erreur lors de l\'ouverture du portail');
+      }
     } finally {
       setPortalLoading(false);
     }
