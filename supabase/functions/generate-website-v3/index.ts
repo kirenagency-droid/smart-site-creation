@@ -11,7 +11,7 @@ const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-// Undo command patterns
+// Command patterns
 const UNDO_PATTERNS = [
   /reviens?\s*(à|a)?\s*la\s*version\s*pr[eé]c[eé]dente/i,
   /undo/i,
@@ -29,12 +29,35 @@ const LIST_VERSIONS_PATTERNS = [
   /voir\s*(les)?\s*versions?/i
 ];
 
+// Mode detection patterns
+const REPAIR_PATTERNS = [
+  /bug|erreur|problème|probleme|cassé|casse|marche\s*pas|fonctionne\s*pas/i,
+  /manque|disparu|invisible|plus\s*là|plus\s*la/i,
+  /corrige|répare|repare|fix|debug|résoudre|resoudre/i,
+  /ne\s*(s')?affiche\s*pas|n'apparaît\s*pas|n'apparait\s*pas/i,
+  /broken|missing|wrong|incorrect/i,
+  /pourquoi\s*(ça|ca)\s*(ne)?\s*(marche|fonctionne)\s*pas/i
+];
+
 function isUndoCommand(message: string): boolean {
   return UNDO_PATTERNS.some(pattern => pattern.test(message));
 }
 
 function isListVersionsCommand(message: string): boolean {
   return LIST_VERSIONS_PATTERNS.some(pattern => pattern.test(message));
+}
+
+function detectMode(message: string, hasExistingHtml: boolean): 'repair' | 'creative' {
+  // Check for explicit repair indicators
+  if (REPAIR_PATTERNS.some(pattern => pattern.test(message))) {
+    return 'repair';
+  }
+  // New site = always creative
+  if (!hasExistingHtml) {
+    return 'creative';
+  }
+  // Default to creative for modifications
+  return 'creative';
 }
 
 function hasImageData(imageData: string | null): boolean {
@@ -66,9 +89,10 @@ function validateAndFixHtml(html: string): string {
   if (!fixedHtml.includes('fonts.googleapis.com') || !fixedHtml.includes('Inter')) {
     fixedHtml = fixedHtml.replace(
       '</head>',
-      `  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+      `  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
     * { font-family: 'Inter', sans-serif; scroll-behavior: smooth; }
+    .font-serif { font-family: 'Playfair Display', serif; }
   </style>\n</head>`
     );
   }
@@ -82,188 +106,239 @@ function sendSSE(controller: ReadableStreamDefaultController, event: object) {
   controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
 }
 
-const systemPrompt = `Tu es Créali, une IA de génération de sites web de niveau PROFESSIONNEL. Tu produis du code de qualité production comme les meilleurs designers de Framer, Webflow et Lovable.
+// ============================================
+// SYSTEM PROMPTS - Lovable Quality Level
+// ============================================
 
-## 🎯 TON OBJECTIF
-Créer des landing pages EXCEPTIONNELLES qui convertissent, avec un design moderne, du contenu pertinent et une expérience utilisateur fluide.
+const CREALI_PERSONA = `Tu es Creali, un designer/développeur web d'élite passionné et perfectionniste.
 
-## 🧠 PROCESSUS MENTAL (OBLIGATOIRE)
+## Ta personnalité
+- Tu parles naturellement, comme un collègue designer cool et compétent
+- Tu es chaleureux, encourageant et tu donnes des conseils proactifs
+- Tu poses des questions si le brief est flou plutôt que de deviner
+- Tu expliques tes choix de design avec enthousiasme
+- Tu utilises des emojis avec parcimonie (2-3 max)`;
+
+const REPAIR_MODE_PROMPT = `${CREALI_PERSONA}
+
+## MODE REPAIR 🔧
+
+Tu es en mode RÉPARATION. L'utilisateur signale un problème.
+
+### RÈGLES STRICTES
+1. Identifie précisément le problème signalé dans <thinking>
+2. Trouve la cause technique exacte
+3. Applique la correction MINIMALE nécessaire
+4. NE TOUCHE PAS aux parties qui fonctionnent
+5. NE REDESIGNE PAS le site
+6. NE PROPOSE PAS de nouvelles fonctionnalités non demandées
+
+### FORMAT
+<thinking>
+Problème identifié: [description précise]
+Cause probable: [cause technique]
+Solution: [correction à appliquer]
+</thinking>
+
+[Code HTML COMPLET avec UNIQUEMENT les modifications nécessaires pour résoudre le problème]`;
+
+const CREATIVE_MODE_PROMPT = `${CREALI_PERSONA}
+
+## MODE CREATIVE 🎨
+
+Tu crées des landing pages EXCEPTIONNELLES de niveau Framer/Webflow/Lovable.
+
+## 🧠 PROCESSUS MENTAL (Dans <thinking>)
 AVANT de coder, analyse TOUJOURS:
 1. **Niche précise**: Pas "coach" mais "coach business pour entrepreneurs tech"
 2. **Client idéal**: Âge, revenus, problèmes, aspirations
 3. **Émotion à transmettre**: Confiance? Luxe? Énergie? Innovation?
 4. **Différenciateur**: Qu'est-ce qui rend ce business UNIQUE?
-5. **Objectif conversion**: Prise de RDV? Achat? Lead? Contact?
+5. **Palette choisie**: Couleurs spécifiques adaptées à la niche
+6. **Sections planifiées**: Liste des sections à créer
 
 ## 🎨 DESIGN SYSTEM PREMIUM
 
-### Palettes par Industrie
+### Palettes par Industrie (OBLIGATOIRE - NE PAS utiliser les mêmes couleurs pour tout!)
 - **Tech/SaaS**: bg-[#0a0a0f] text-white, accent violet #8b5cf6 ou bleu #3b82f6
-- **Luxe**: bg-[#0c0c0c] ou bg-[#faf9f6], accent or #c9a962, serif fonts
-- **Bien-être**: bg-[#fefdfb], accent vert sauge #7c9a82 ou terracotta #c4a77d
-- **Fitness**: bg-[#0f0f0f], accent rouge #ef4444 ou orange #f97316
-- **Food**: bg-[#fffbf5], accent chaud #d97706 ou rouge #dc2626
-- **Corporate**: bg-white, accent bleu #2563eb, gris #64748b
-- **Créatif**: Noir/blanc avec 1 accent coloré
+- **Luxe/Premium**: bg-[#0c0c0c] ou bg-[#faf9f6], accent or #c9a962, typo serif
+- **Bien-être/Spa**: bg-[#fefdfb], accent vert sauge #7c9a82 ou terracotta #c4a77d
+- **Fitness/Sport**: bg-[#0f0f0f], accent rouge #ef4444 ou orange #f97316, énergie forte
+- **Food/Restaurant**: bg-[#fffbf5], accent chaud #d97706 ou rouge #dc2626
+- **Corporate/B2B**: bg-white clean, accent bleu #2563eb, pro et sobre
+- **Créatif/Agence**: Noir/blanc contrasté avec 1 accent coloré unique
+- **E-commerce**: bg-white minimal, accent brand color, focus produit
+- **Immobilier**: bg-[#f8f7f4], accent doré #b8860b ou vert #166534, élégance
+- **Mode/Beauté**: bg-[#faf8f5], accent rose #ec4899 ou nude #d4a574
+- **Coaching/Formation**: bg-gradient sombre, accent énergique, confiance
 
-### Typographie Excellence
+### Typographie
 \`\`\`html
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 \`\`\`
-- **Titres H1**: text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold tracking-tight leading-[1.1]
-- **Sous-titres**: text-lg md:text-xl text-gray-600 max-w-2xl
+- **H1**: text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold tracking-tight leading-[1.1]
+- **H2**: text-3xl md:text-4xl lg:text-5xl font-bold
+- **Sous-titres**: text-lg md:text-xl text-gray-400 max-w-2xl
 - **Body**: text-base leading-relaxed
 
-### Spacing Système
+### Spacing & Layout
 - Sections: py-20 md:py-28 lg:py-32
 - Containers: max-w-7xl mx-auto px-4 sm:px-6 lg:px-8
 - Gaps: gap-4 md:gap-6 lg:gap-8
+- Cards: p-6 md:p-8 rounded-2xl md:rounded-3xl
 
-## 📐 COMPOSANTS DE RÉFÉRENCE
+## 📐 COMPOSANTS PREMIUM (Utilise ces patterns!)
 
-### Hero Section Premium
+### Hero avec effet glassmorphism et animations
 \`\`\`html
 <section class="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-black">
-  <!-- Background Effect -->
   <div class="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.3),transparent)]"></div>
+  <div class="absolute inset-0 overflow-hidden">
+    <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse"></div>
+    <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-pulse" style="animation-delay: 1s;"></div>
+  </div>
   
   <div class="relative z-10 max-w-5xl mx-auto px-4 text-center">
-    <!-- Badge -->
     <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 border border-white/20 text-sm text-gray-300 mb-8 backdrop-blur-sm">
       <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-      <span>Disponible maintenant</span>
+      <span>Badge accrocheur contextuel</span>
     </div>
     
     <h1 class="text-4xl md:text-6xl lg:text-7xl font-bold text-white mb-6 tracking-tight">
-      Transformez votre 
-      <span class="bg-gradient-to-r from-purple-400 via-pink-500 to-orange-500 bg-clip-text text-transparent">vision</span>
-      en réalité
+      Titre impactant avec 
+      <span class="bg-gradient-to-r from-purple-400 via-pink-500 to-orange-500 bg-clip-text text-transparent">mot clé gradient</span>
     </h1>
     
     <p class="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-      Description claire et impactante qui explique la valeur unique en une phrase.
+      Sous-titre qui explique la proposition de valeur unique en une phrase claire.
     </p>
     
     <div class="flex flex-col sm:flex-row gap-4 justify-center">
-      <a href="#" class="group px-8 py-4 bg-white text-gray-900 rounded-full font-semibold hover:bg-gray-100 transition-all duration-300 flex items-center justify-center gap-2">
-        Commencer maintenant
+      <a href="#" class="group px-8 py-4 bg-white text-gray-900 rounded-full font-semibold hover:bg-gray-100 transition-all duration-300 hover:scale-105 flex items-center justify-center gap-2 shadow-lg shadow-white/25">
+        CTA Principal
         <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
       </a>
       <a href="#" class="px-8 py-4 border border-white/20 text-white rounded-full font-semibold hover:bg-white/10 transition-all duration-300">
-        En savoir plus
+        CTA Secondaire
       </a>
     </div>
   </div>
 </section>
 \`\`\`
 
-### Feature Card Premium
+### Feature Card avec Glass Effect
 \`\`\`html
-<div class="group relative p-8 rounded-3xl bg-gradient-to-br from-white to-gray-50 border border-gray-200 hover:border-gray-300 transition-all duration-500 hover:shadow-2xl hover:-translate-y-1">
-  <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500">
-    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><!-- icon --></svg>
+<div class="group relative p-8 rounded-3xl bg-white/5 backdrop-blur-xl border border-white/10 hover:border-white/20 transition-all duration-500 hover:shadow-2xl hover:-translate-y-2">
+  <div class="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+  <div class="relative z-10">
+    <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500 shadow-lg shadow-purple-500/25">
+      <!-- Icon SVG -->
+    </div>
+    <h3 class="text-xl font-bold text-white mb-3">Titre Feature</h3>
+    <p class="text-gray-400 leading-relaxed">Description spécifique à la niche.</p>
   </div>
-  <h3 class="text-xl font-bold text-gray-900 mb-3">Titre Feature</h3>
-  <p class="text-gray-600 leading-relaxed">Description détaillée et pertinente de la feature.</p>
 </div>
 \`\`\`
 
-### Testimonial Premium
+### Navbar Sticky avec scroll effect
 \`\`\`html
-<div class="relative p-8 rounded-3xl bg-white border border-gray-100 shadow-lg">
-  <div class="flex items-center gap-1 mb-4">
-    <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
-    <!-- Répéter 5x -->
-  </div>
-  <p class="text-gray-700 mb-6 text-lg leading-relaxed">"Témoignage authentique et spécifique au business."</p>
-  <div class="flex items-center gap-4">
-    <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop" alt="" class="w-12 h-12 rounded-full object-cover">
-    <div>
-      <p class="font-semibold text-gray-900">Nom Prénom</p>
-      <p class="text-sm text-gray-500">Titre, Entreprise</p>
+<nav class="fixed top-0 left-0 right-0 z-50 transition-all duration-300" id="navbar">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center justify-between h-20">
+      <!-- Logo + Nav Links + CTA -->
     </div>
   </div>
-</div>
+</nav>
+<script>
+window.addEventListener('scroll', () => {
+  const navbar = document.getElementById('navbar');
+  if (window.scrollY > 50) {
+    navbar.classList.add('bg-gray-900/80', 'backdrop-blur-xl', 'border-b', 'border-white/10');
+  } else {
+    navbar.classList.remove('bg-gray-900/80', 'backdrop-blur-xl', 'border-b', 'border-white/10');
+  }
+});
+</script>
 \`\`\`
 
-## ✅ CHECKLIST QUALITÉ (OBLIGATOIRE)
+## 🖼️ IMAGES UNSPLASH (Utilise ces URLs!)
 
-Avant de terminer, vérifie CHAQUE point:
-- [ ] Minimum 6 sections complètes
-- [ ] Contenu RÉEL adapté à la niche (0 placeholder)
-- [ ] Minimum 4 images Unsplash haute qualité
-- [ ] Responsive: breakpoints sm, md, lg, xl utilisés
-- [ ] Animations: hover states sur tous les éléments interactifs
-- [ ] CTA clair et visible à plusieurs endroits
-- [ ] Footer complet avec liens
-- [ ] Navbar sticky avec backdrop-blur
-- [ ] Palette cohérente (max 3-4 couleurs)
-- [ ] Hiérarchie typographique claire
-
-## 🖼️ BANQUE D'IMAGES UNSPLASH
-
-**Portraits professionnels:**
+**Portraits:**
 - https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop
 - https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop
 - https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=400&h=400&fit=crop
+- https://images.unsplash.com/photo-1560250097-0b93528c311a?w=400&h=400&fit=crop
 
-**Business/Corporate:**
-- https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200&h=800&fit=crop
-- https://images.unsplash.com/photo-1551434678-e076c223a692?w=1200&h=800&fit=crop
+**Business:** https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200&h=800&fit=crop
+**Tech:** https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=1200&h=800&fit=crop
+**Fitness:** https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1200&h=800&fit=crop
+**Food:** https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1200&h=800&fit=crop
+**Bien-être:** https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=1200&h=800&fit=crop
+**Immobilier:** https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1200&h=800&fit=crop
 
-**Tech/Startup:**
-- https://images.unsplash.com/photo-1551434678-e076c223a692?w=1200&h=800&fit=crop
-- https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=1200&h=800&fit=crop
+## ✅ CHECKLIST QUALITÉ (OBLIGATOIRE avant de terminer)
 
-**Bien-être:**
-- https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=1200&h=800&fit=crop
-- https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=1200&h=800&fit=crop
-
-**Fitness:**
-- https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1200&h=800&fit=crop
-- https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=1200&h=800&fit=crop
-
-**Food:**
-- https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1200&h=800&fit=crop
-- https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1200&h=800&fit=crop
+- [ ] Minimum 7 sections complètes et pertinentes
+- [ ] Contenu RÉEL adapté à la niche (JAMAIS "Lorem ipsum" ou "Votre entreprise")
+- [ ] Minimum 4 vraies images Unsplash
+- [ ] Responsive complet: sm, md, lg, xl breakpoints
+- [ ] Animations: hover states sur TOUS les boutons/cards
+- [ ] CTA visible à plusieurs endroits
+- [ ] Footer complet avec liens
+- [ ] Navbar sticky avec backdrop-blur
+- [ ] Palette cohérente et adaptée à la niche
+- [ ] Hiérarchie typographique claire
 
 ## 🚫 ERREURS INTERDITES
 
-- Textes génériques: "Bienvenue", "Lorem ipsum", "Votre entreprise"
-- Design identique entre niches différentes
-- Couleurs violet/bleu par défaut pour tout
-- Images placeholder ou cassées
-- Pas de hover states
-- Sections vides ou incomplètes
+- "Bienvenue sur notre site", "Lorem ipsum", "Votre entreprise ici"
+- Mêmes couleurs violet/bleu pour toutes les niches
+- Oublier les hover states
+- Images cassées ou placeholder
+- Sections incomplètes
 - Ignorer le responsive
-- Oublier les animations
 
 ## 📤 FORMAT DE SORTIE
 
-1. **D'abord** \`<thinking>\` avec ton analyse complète de la niche
-2. **Puis** le code HTML COMPLET, prêt pour production
+1. <thinking> avec analyse complète de la niche et tes choix
+2. Code HTML COMPLET prêt pour production`;
 
-Le code doit être immédiatement utilisable, pas un template à compléter.`;
+const VISION_PROMPT = `${CREALI_PERSONA}
 
-const visionSystemPrompt = `Tu es Créali Vision, expert en reproduction de designs web à partir d'images.
+## MODE VISION 👁️
 
-## PROCESSUS D'ANALYSE
+Tu analyses une image de référence pour reproduire son style en code.
 
-1. **Structure**: Identifie le layout (grids, flexbox, sections)
-2. **Couleurs**: Note les codes hex exacts visibles
-3. **Typographie**: Fonts, tailles, poids
-4. **Espacement**: Marges, padding, gaps
-5. **Éléments distinctifs**: Ce qui rend le design unique
+## PROCESSUS D'ANALYSE (Dans <thinking>)
 
-## RÈGLES DE REPRODUCTION
+1. **Layout**: Structure de la page, grilles, disposition
+2. **Palette**: Couleurs exactes (bg, text, accents)
+3. **Typographie**: Styles, tailles, poids
+4. **Espacement**: Marges, padding, respiration
+5. **Éléments uniques**: Ce qui rend ce design mémorable
+6. **Ambiance globale**: Luxe? Tech? Minimaliste?
+
+## RÈGLES
 
 - Reproduis le STYLE et l'AMBIANCE, pas pixel par pixel
-- Modernise avec Tailwind CSS
-- Garde la même hiérarchie visuelle
-- Adapte les couleurs si nécessaire
-- Ajoute des animations hover
+- Utilise Tailwind CSS moderne
+- Garde la hiérarchie visuelle
+- Ajoute des micro-interactions
+- Assure le responsive
 
-SORTIE: <thinking>analyse détaillée</thinking> puis le code HTML complet.`;
+FORMAT: <thinking>analyse détaillée</thinking> puis code HTML complet.`;
+
+const DESIGN_NOTE_PROMPT = `Tu es Creali. Résume ce que tu viens de créer en 3-4 phrases maximum.
+
+RÈGLES:
+- Mentionne le style/ambiance choisi
+- Explique UN choix de design clé
+- Propose UNE amélioration possible
+- Max 2-3 emojis
+- Ton chaleureux de designer
+
+EXEMPLE:
+"J'ai créé une landing page tech avec un style dark premium ✨ J'ai opté pour des gradients violet/bleu et des effets glassmorphism pour un rendu moderne. La section hero utilise des animations subtiles pour capter l'attention. 💡 Tu pourrais ajouter une section FAQ pour répondre aux objections courantes !"`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -297,9 +372,8 @@ serve(async (req) => {
     const { projectId, message, currentHtml, siteStructure, imageData, conversationHistory, stream } = await req.json();
     console.log('Request received:', { projectId, message: message?.substring(0, 100), hasImage: !!imageData, stream });
 
-    // Handle non-streaming requests (undo, list versions)
+    // Handle version commands
     if (isListVersionsCommand(message) || isUndoCommand(message)) {
-      // Same logic as v2 for these commands
       if (isListVersionsCommand(message)) {
         const { data: versions } = await supabaseClient
           .from('project_versions')
@@ -310,7 +384,7 @@ serve(async (req) => {
 
         let responseMessage = '';
         if (!versions || versions.length === 0) {
-          responseMessage = "C'est la première version de ton projet. Aucun historique disponible pour le moment. 📝";
+          responseMessage = "C'est la première version de ton projet ! Aucun historique disponible pour le moment. 📝";
         } else {
           responseMessage = `📜 **Historique des versions**\n\n`;
           versions.forEach((v) => {
@@ -319,7 +393,7 @@ serve(async (req) => {
             });
             responseMessage += `• Version ${v.version_number} — ${date}\n`;
           });
-          responseMessage += `\nPour revenir en arrière, dis simplement "undo". 🔄`;
+          responseMessage += `\n💡 Pour revenir en arrière, dis simplement "undo"`;
         }
 
         await supabaseClient.from('project_messages').insert([
@@ -343,7 +417,7 @@ serve(async (req) => {
           .maybeSingle();
 
         if (!previousVersion) {
-          const noVersionMessage = "C'est la première version de ton projet, il n'y a pas de version antérieure. 😊";
+          const noVersionMessage = "C'est la première version de ton projet, pas de version antérieure disponible ! 😊";
           await supabaseClient.from('project_messages').insert([
             { project_id: projectId, role: 'user', content: message, tokens_used: 0 },
             { project_id: projectId, role: 'assistant', content: noVersionMessage }
@@ -357,7 +431,7 @@ serve(async (req) => {
         await supabaseClient.from('projects').update({ current_html: previousVersion.html_content }).eq('id', projectId);
         await supabaseClient.from('project_versions').delete().eq('id', previousVersion.id);
 
-        const undoMessage = `✅ J'ai restauré la version ${previousVersion.version_number} de ton site. 🎨`;
+        const undoMessage = `✅ J'ai restauré la version ${previousVersion.version_number}. Ton site est revenu à son état précédent ! 🎨`;
         await supabaseClient.from('project_messages').insert([
           { project_id: projectId, role: 'user', content: message, tokens_used: 0 },
           { project_id: projectId, role: 'assistant', content: undoMessage }
@@ -370,7 +444,7 @@ serve(async (req) => {
       }
     }
 
-    // Check and deduct tokens
+    // Check tokens
     const { data: canDeduct, error: deductError } = await supabaseClient.rpc('deduct_tokens', {
       user_uuid: user.id,
       amount: 5
@@ -378,12 +452,12 @@ serve(async (req) => {
 
     if (deductError || !canDeduct) {
       return new Response(
-        JSON.stringify({ error: 'Tokens insuffisants. Passe au plan Pro ! 🚀' }),
+        JSON.stringify({ error: 'Crédits insuffisants. Passe au plan Pro pour continuer ! 🚀' }),
         { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Save current version before generating
+    // Save current version
     if (currentHtml && currentHtml.trim().length > 0) {
       const { count } = await supabaseClient
         .from('project_versions')
@@ -397,34 +471,45 @@ serve(async (req) => {
       });
     }
 
+    // Detect mode and build prompt
+    const mode = detectMode(message, !!currentHtml);
+    const useVision = hasImageData(imageData);
+    const model = 'google/gemini-2.5-pro';
+    
+    let systemPromptToUse: string;
+    if (useVision) {
+      systemPromptToUse = VISION_PROMPT;
+    } else if (mode === 'repair') {
+      systemPromptToUse = REPAIR_MODE_PROMPT;
+    } else {
+      systemPromptToUse = CREATIVE_MODE_PROMPT;
+    }
+
+    console.log('Mode detected:', mode, 'Vision:', useVision);
+
     // Build conversation context
     const conversationContext = conversationHistory?.map((msg: any) => ({
       role: msg.role === 'user' ? 'user' : 'assistant',
       content: msg.content
     })) || [];
 
-    // Build the prompt
-    const useVision = hasImageData(imageData);
-    const model = 'google/gemini-2.5-pro';
-    const systemPromptToUse = useVision ? visionSystemPrompt : systemPrompt;
-
+    // Build user content
     let userContent: any;
     if (useVision) {
       userContent = [
         {
           type: "text",
           text: currentHtml 
-            ? `Site actuel:\n\`\`\`html\n${currentHtml.substring(0, 6000)}\n\`\`\`\n\nInstruction: ${message}`
-            : `Instruction: ${message}\n\nAnalyse l'image et génère un site PREMIUM.`
+            ? `Site actuel:\n\`\`\`html\n${currentHtml.substring(0, 6000)}\n\`\`\`\n\nInstruction: ${message}\n\nAnalyse l'image et modifie le site selon les instructions.`
+            : `Instruction: ${message}\n\nAnalyse cette image et génère un site web PREMIUM qui s'en inspire.`
         },
         { type: "image_url", image_url: { url: imageData } }
       ];
+    } else if (currentHtml) {
+      const contextStr = conversationContext.slice(-8).map((m: any) => `${m.role}: ${m.content}`).join('\n');
+      userContent = `Contexte de conversation:\n${contextStr}\n\nSite actuel:\n\`\`\`html\n${currentHtml.substring(0, 10000)}\n\`\`\`\n\nNouvelle demande: ${message}\n\nD'abord réfléchis dans <thinking></thinking>, puis génère le HTML complet modifié.`;
     } else {
-      if (currentHtml) {
-        userContent = `Historique de conversation:\n${conversationContext.slice(-10).map((m: any) => `${m.role}: ${m.content}`).join('\n')}\n\nSite actuel:\n\`\`\`html\n${currentHtml.substring(0, 8000)}\n\`\`\`\n\nNouvelle demande: ${message}\n\nD'abord réfléchis dans <thinking></thinking>, puis génère le HTML complet.`;
-      } else {
-        userContent = `Crée un site web professionnel PREMIUM pour: ${message}\n\nD'abord réfléchis dans <thinking></thinking>, puis génère le HTML complet avec navbar, hero, sections, et footer.`;
-      }
+      userContent = `Crée un site web professionnel PREMIUM pour: ${message}\n\nD'abord réfléchis dans <thinking></thinking> en analysant la niche, puis génère le HTML complet avec navbar sticky, hero impactant, minimum 7 sections, et footer complet.`;
     }
 
     // STREAMING MODE
@@ -513,11 +598,10 @@ serve(async (req) => {
                     }
                   }
 
-                  // Extract HTML content after thinking
+                  // Extract HTML
                   if (!inThinkingBlock && fullContent.includes('</thinking>')) {
                     const afterThinking = fullContent.split('</thinking>')[1] || '';
                     
-                    // Check for HTML content
                     let htmlMatch = afterThinking.match(/```html([\s\S]*?)```/);
                     if (!htmlMatch) {
                       htmlMatch = afterThinking.match(/<!DOCTYPE html[\s\S]*/i);
@@ -542,7 +626,7 @@ serve(async (req) => {
               }
             }
 
-            // Finalize
+            // Finalize HTML
             let finalHtml = htmlContent;
             if (finalHtml.includes('```html')) {
               finalHtml = finalHtml.split('```html')[1]?.split('```')[0]?.trim() || finalHtml;
@@ -550,7 +634,6 @@ serve(async (req) => {
               finalHtml = finalHtml.split('```')[1]?.split('```')[0]?.trim() || finalHtml;
             }
 
-            // If no HTML was extracted, try to get it from full content
             if (!finalHtml || finalHtml.length < 100) {
               let match = fullContent.match(/```html([\s\S]*?)```/);
               if (!match) match = fullContent.match(/<!DOCTYPE html[\s\S]*/i);
@@ -561,11 +644,11 @@ serve(async (req) => {
 
             finalHtml = validateAndFixHtml(finalHtml);
 
-            // Save to database
+            // Save to DB
             await supabaseClient.from('projects').update({ current_html: finalHtml }).eq('id', projectId);
 
             // Generate design note
-            let designNote = 'Site généré avec succès ! 🎨';
+            let designNote = 'Site mis à jour avec succès ! 🎨';
             try {
               const noteResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
                 method: 'POST',
@@ -576,8 +659,8 @@ serve(async (req) => {
                 body: JSON.stringify({
                   model: 'google/gemini-2.5-flash',
                   messages: [
-                    { role: 'system', content: 'Tu es un designer. Résume en 2-3 phrases ce que tu as fait et propose une amélioration. Sois chaleureux et pro.' },
-                    { role: 'user', content: `Brief: "${message}"\nRéflexion IA: ${thinkingContent.substring(0, 1000)}` }
+                    { role: 'system', content: DESIGN_NOTE_PROMPT },
+                    { role: 'user', content: `Brief utilisateur: "${message}"\n\nRéflexion du designer:\n${thinkingContent.substring(0, 1500)}\n\nMode: ${mode}` }
                   ],
                 }),
               });
@@ -617,7 +700,7 @@ serve(async (req) => {
       });
     }
 
-    // NON-STREAMING MODE (fallback)
+    // NON-STREAMING MODE
     console.log('Calling AI Gateway (non-streaming)');
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -651,7 +734,7 @@ serve(async (req) => {
     const data = await response.json();
     let generatedContent = data.choices?.[0]?.message?.content || '';
 
-    // Extract HTML from response
+    // Extract HTML
     let generatedHtml = '';
     if (generatedContent.includes('```html')) {
       generatedHtml = generatedContent.split('```html')[1].split('```')[0].trim();
@@ -679,8 +762,8 @@ serve(async (req) => {
         body: JSON.stringify({
           model: 'google/gemini-2.5-flash',
           messages: [
-            { role: 'system', content: 'Tu es un designer. Résume en 2-3 phrases ce que tu as fait et propose une amélioration. Sois chaleureux et pro.' },
-            { role: 'user', content: `Brief: "${message}"\nRéflexion: ${thinkingContent.substring(0, 1000)}` }
+            { role: 'system', content: DESIGN_NOTE_PROMPT },
+            { role: 'user', content: `Brief: "${message}"\nRéflexion: ${thinkingContent.substring(0, 1500)}\nMode: ${mode}` }
           ],
         }),
       });
@@ -693,7 +776,7 @@ serve(async (req) => {
       console.error('Error generating note:', e);
     }
 
-    // Save to database
+    // Save to DB
     await supabaseClient.from('project_messages').insert([
       { project_id: projectId, role: 'user', content: message, tokens_used: 5 },
       { project_id: projectId, role: 'assistant', content: designNote }

@@ -417,12 +417,64 @@ const Builder = () => {
                   <AIProactiveSuggestions onSuggestionClick={suggestion => setInputValue(suggestion)} hasContent={false} />
                 </div>}
 
-              {messages.map(message => <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-foreground'}`}>
-                    {message.image && <img src={message.image} alt="Reference" className="w-full max-h-32 object-cover rounded-lg mb-2" />}
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+              {messages.map(message => (
+                <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in-0 slide-in-from-bottom-2 duration-300`}>
+                  <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                    message.role === 'user' 
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'bg-gradient-to-br from-secondary to-secondary/80 text-foreground border border-white/5'
+                  }`}>
+                    {message.image && (
+                      <img 
+                        src={message.image} 
+                        alt="Reference" 
+                        className="w-full max-h-32 object-cover rounded-lg mb-2 ring-1 ring-white/10" 
+                      />
+                    )}
+                    {message.role === 'assistant' ? (
+                      <div className="text-sm space-y-2">
+                        {message.content.split('\n').map((line, idx) => {
+                          // Handle bold text with **
+                          const formattedLine = line.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>');
+                          // Handle bullet points
+                          if (line.startsWith('•') || line.startsWith('-') || line.startsWith('→')) {
+                            return (
+                              <p key={idx} className="flex gap-2 text-foreground/80">
+                                <span className="text-primary shrink-0">{line.charAt(0)}</span>
+                                <span dangerouslySetInnerHTML={{ __html: formattedLine.slice(1).trim() }} />
+                              </p>
+                            );
+                          }
+                          // Handle numbered lists
+                          if (/^\d+\./.test(line)) {
+                            const [num, ...rest] = line.split('.');
+                            return (
+                              <p key={idx} className="flex gap-2 text-foreground/80">
+                                <span className="text-primary font-medium shrink-0">{num}.</span>
+                                <span dangerouslySetInnerHTML={{ __html: rest.join('.').trim().replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>') }} />
+                              </p>
+                            );
+                          }
+                          // Handle headings
+                          if (line.startsWith('#')) {
+                            return (
+                              <p key={idx} className="font-semibold text-foreground mt-2">
+                                {line.replace(/^#+\s*/, '')}
+                              </p>
+                            );
+                          }
+                          // Regular text
+                          return line.trim() ? (
+                            <p key={idx} className="text-foreground/80" dangerouslySetInnerHTML={{ __html: formattedLine }} />
+                          ) : null;
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    )}
                   </div>
-                </div>)}
+                </div>
+              ))}
 
               {/* Streaming Thinking Display */}
               {isStreaming && <StreamingThinking thinkingText={streaming.thinkingText} phase={streaming.phase} isStreaming={isStreaming} />}
