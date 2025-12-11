@@ -11,45 +11,77 @@ interface VerifyDomainRequest {
   domain: string;
 }
 
-interface VercelDnsConfig {
-  aRecord?: { name: string; value: string };
-  cnameRecord?: { name: string; value: string };
-  txtVerification?: { name: string; value: string };
-}
-
-// Get Vercel project ID from name
-async function getVercelProjectId(projectName: string, vercelToken: string): Promise<string | null> {
-  try {
-    const response = await fetch(`https://api.vercel.com/v9/projects/${projectName}`, {
-      headers: { 'Authorization': `Bearer ${vercelToken}` },
-    });
-    
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.id || null;
-  } catch {
-    return null;
-  }
-}
-
-// Add domain to Vercel and get the real DNS requirements
-async function addDomainToVercelAndGetConfig(
+// Add domain to Vercel project - AUTOMATIC, user doesn't need Vercel access
+async function addDomainToVercel(
   domain: string, 
   projectName: string, 
   vercelToken: string
-): Promise<{ success: boolean; projectId?: string; dnsConfig?: VercelDnsConfig; error?: string }> {
-  console.log(`🔗 Adding domain ${domain} to Vercel project ${projectName}`);
+): Promise<{ 
+  success: boolean; 
+  projectId?: string; 
+  aRecordIp?: string;
+  verificationRequired?: { type: string; domain: string; value: string }[];
+  error?: string;
+}> {
+  console.log(`🔗 Adding domain ${domain} to Vercel project ${projectName} (AUTOMATIC)`);
   
   try {
-    // Get project ID
-    const projectId = await getVercelProjectId(projectName, vercelToken);
-    if (!projectId) {
-      return { success: false, error: `Project ${projectName} not found` };
+    // 1. Get or create project
+    let projectId: string;
+    
+    const projectResponse = await fetch(`https://api.vercel.com/v9/projects/${projectName}`, {
+      headers: { 'Authorization': `Bearer ${vercelToken}` },
+    });
+    
+    if (!projectResponse.ok) {
+      // Create project if doesn't exist
+      console.log(`Creating new Vercel project: ${projectName}`);
+      const createResponse = await fetch('https://api.vercel.com/v9/projects', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${vercelToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: projectName }),
+      });
+      
+      if (!createResponse.ok) {
+        const errorData = await createResponse.json();
+        return { success: false, error: `Failed to create project: ${errorData.error?.message}` };
+      }
+      
+      const newProject = await createResponse.json();
+      projectId = newProject.id;
+    } else {
+      const project = await projectResponse.json();
+      projectId = project.id;
     }
-    console.log(`Found Vercel project: ${projectId}`);
+    
+    console.log(`✅ Using Vercel project: ${projectId}`);
 
-    // Try to add domain
-    const domainResponse = await fetch(`https://api.vercel.com/v10/projects/${projectId}/domains`, {
+    // 2. Check if domain is on another project and remove it
+    try {
+      const domainCheckResponse = await fetch(`https://api.vercel.com/v9/domains/${domain}`, {
+        headers: { 'Authorization': `Bearer ${vercelToken}` },
+      });
+      
+      if (domainCheckResponse.ok) {
+        const domainData = await domainCheckResponse.json();
+        if (domainData.projectId && domainData.projectId !== projectId) {
+          console.log(`⚠️ Domain on old project ${domainData.projectId}, removing...`);
+          await fetch(`https://api.vercel.com/v10/projects/${domainData.projectId}/domains/${domain}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${vercelToken}` },
+          });
+          console.log(`✅ Removed from old project`);
+        }
+      }
+    } catch (e) {
+      console.log('Domain not found on any project (good)');
+    }
+
+    // 3. Add domain to our project
+    const addDomainResponse = await fetch(`https://api.vercel.com/v10/projects/${projectId}/domains`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${vercelToken}`,
@@ -58,58 +90,15 @@ async function addDomainToVercelAndGetConfig(
       body: JSON.stringify({ name: domain }),
     });
     
-    const domainData = await domainResponse.json();
-    console.log(`Vercel add domain response:`, JSON.stringify(domainData, null, 2));
+    const addDomainData = await addDomainResponse.json();
+    console.log(`Add domain response:`, JSON.stringify(addDomainData, null, 2));
 
-    // Handle 409 conflict - domain might already exist
-    if (domainResponse.status === 409) {
-      console.log(`Domain ${domain} already exists, checking configuration...`);
-    } else if (!domainResponse.ok && domainResponse.status !== 409) {
-      return { success: false, error: domainData.error?.message || 'Failed to add domain' };
+    // 409 = already exists (ok), or check for error
+    if (!addDomainResponse.ok && addDomainResponse.status !== 409) {
+      return { success: false, error: addDomainData.error?.message || 'Failed to add domain' };
     }
 
-    // Now get the domain configuration to see what Vercel requires
-    const configResponse = await fetch(
-      `https://api.vercel.com/v9/projects/${projectId}/domains/${domain}`,
-      { headers: { 'Authorization': `Bearer ${vercelToken}` } }
-    );
-    
-    const configData = await configResponse.json();
-    console.log(`Vercel domain config:`, JSON.stringify(configData, null, 2));
-
-    // Extract the real DNS requirements from Vercel
-    const dnsConfig: VercelDnsConfig = {};
-
-    // Check if Vercel provides specific configuration
-    if (configData.verification) {
-      // Vercel needs verification record
-      const verification = configData.verification[0];
-      if (verification) {
-        dnsConfig.txtVerification = {
-          name: verification.domain || `_vercel.${domain}`,
-          value: verification.value,
-        };
-      }
-    }
-
-    // Get recommended A record value - check if Vercel provides it
-    // Vercel uses 76.76.21.21 as default, but sometimes assigns different IPs
-    if (configData.apexName === domain) {
-      // It's an apex domain, needs A record
-      // Get the intended target from Vercel's response
-      dnsConfig.aRecord = {
-        name: '@',
-        value: '76.76.21.21', // Default Vercel IP
-      };
-    }
-
-    // For www subdomain
-    dnsConfig.cnameRecord = {
-      name: 'www',
-      value: 'cname.vercel-dns.com',
-    };
-
-    // Also add www subdomain as redirect
+    // 4. Also add www subdomain as redirect
     try {
       await fetch(`https://api.vercel.com/v10/projects/${projectId}/domains`, {
         method: 'POST',
@@ -117,25 +106,33 @@ async function addDomainToVercelAndGetConfig(
           'Authorization': `Bearer ${vercelToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name: `www.${domain}`,
-          redirect: domain,
-        }),
+        body: JSON.stringify({ name: `www.${domain}`, redirect: domain }),
       });
       console.log(`✅ www.${domain} redirect configured`);
     } catch {
-      console.log(`Note: www subdomain setup skipped`);
+      console.log(`www subdomain setup skipped`);
     }
 
-    // Check if domain needs special verification (misconfigured DNS)
-    if (configData.verified === false && configData.verification?.length > 0) {
-      console.log(`⚠️ Domain needs verification via: ${configData.verification[0].type}`);
+    // 5. Get domain config to see what Vercel needs
+    const configResponse = await fetch(
+      `https://api.vercel.com/v9/projects/${projectId}/domains/${domain}`,
+      { headers: { 'Authorization': `Bearer ${vercelToken}` } }
+    );
+    
+    const configData = await configResponse.json();
+    console.log(`Domain config:`, JSON.stringify(configData, null, 2));
+
+    // Extract verification requirements if needed
+    let verificationRequired: { type: string; domain: string; value: string }[] | undefined;
+    if (!configData.verified && configData.verification?.length > 0) {
+      verificationRequired = configData.verification;
     }
 
     return { 
       success: true, 
       projectId,
-      dnsConfig,
+      aRecordIp: '76.76.21.21', // Vercel's standard IP
+      verificationRequired,
     };
   } catch (error) {
     console.error('Vercel API error:', error);
@@ -153,6 +150,13 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const vercelToken = Deno.env.get('VERCEL_TOKEN');
     
+    if (!vercelToken) {
+      return new Response(
+        JSON.stringify({ error: 'Vercel token not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(
@@ -175,24 +179,21 @@ serve(async (req) => {
     }
 
     const { deploymentId, domain }: VerifyDomainRequest = await req.json();
-    console.log(`Verify domain request: ${domain} for deployment ${deploymentId}`);
+    console.log(`=== AUTOMATIC DOMAIN SETUP: ${domain} ===`);
 
-    // Check if user has Pro plan
+    // Check Pro plan
     const { data: canUseCustom } = await supabaseAdmin.rpc('can_use_custom_domain', {
       user_uuid: user.id
     });
 
     if (!canUseCustom) {
       return new Response(
-        JSON.stringify({ 
-          error: 'Custom domains require a Pro subscription',
-          requiresUpgrade: true 
-        }),
+        JSON.stringify({ error: 'Custom domains require Pro subscription', requiresUpgrade: true }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Check deployment ownership and get project info
+    // Get deployment
     const { data: deployment, error: deploymentError } = await supabaseAdmin
       .from('deployments')
       .select('*, projects(name)')
@@ -207,87 +208,59 @@ serve(async (req) => {
       );
     }
 
-    // Generate verification token for our system
-    const verificationToken = crypto.randomUUID().replace(/-/g, '').substring(0, 16);
+    // Unique Vercel project per user project
+    const vercelProjectName = `creali-${deployment.project_id.substring(0, 8)}`;
 
-    // Derive Vercel project name
-    const vercelProjectName = deployment.vercel_project_name 
-      || `creali-${deployment.project_id.substring(0, 8)}`;
+    // AUTOMATIC: Add domain to Vercel
+    const vercelResult = await addDomainToVercel(domain, vercelProjectName, vercelToken);
+    
+    if (!vercelResult.success) {
+      console.error(`❌ Failed to add domain to Vercel: ${vercelResult.error}`);
+      return new Response(
+        JSON.stringify({ error: `Configuration Vercel échouée: ${vercelResult.error}` }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    // Default DNS instructions (fallback)
-    let dnsInstructions = {
+    console.log(`✅ Domain ${domain} added to Vercel automatically`);
+
+    // Build DNS instructions
+    const dnsInstructions = {
       records: [
         {
           type: 'A',
           name: '@',
-          value: '76.76.21.21',
-          description: 'Enregistrement A pour le domaine racine'
+          value: vercelResult.aRecordIp || '76.76.21.21',
+          description: 'Enregistrement A - Pointez votre domaine vers Vercel'
         },
         {
-          type: 'CNAME', 
+          type: 'CNAME',
           name: 'www',
           value: 'cname.vercel-dns.com',
-          description: 'Enregistrement CNAME pour le sous-domaine www'
+          description: 'Enregistrement CNAME pour www (optionnel)'
         }
       ],
       notes: [
-        'La propagation DNS peut prendre jusqu\'à 48 heures',
-        'Le certificat SSL sera provisionné automatiquement une fois le DNS vérifié'
+        'Ajoutez ces enregistrements chez votre registrar (Namecheap, GoDaddy, etc.)',
+        'La propagation peut prendre 5-60 minutes',
+        'Le HTTPS sera activé automatiquement une fois le DNS vérifié'
       ]
     };
 
-    // If Vercel token is available, add domain and get real config
-    let vercelProjectId: string | undefined;
-    
-    if (vercelToken) {
-      console.log(`Adding domain to Vercel project ${vercelProjectName}...`);
-      const vercelResult = await addDomainToVercelAndGetConfig(domain, vercelProjectName, vercelToken);
-      
-      if (vercelResult.success && vercelResult.dnsConfig) {
-        vercelProjectId = vercelResult.projectId;
-        
-        // Build DNS instructions from Vercel's actual requirements
-        const records = [];
-        
-        if (vercelResult.dnsConfig.aRecord) {
-          records.push({
-            type: 'A',
-            name: vercelResult.dnsConfig.aRecord.name,
-            value: vercelResult.dnsConfig.aRecord.value,
-            description: 'Enregistrement A pour le domaine racine (Vercel)'
-          });
-        }
-        
-        if (vercelResult.dnsConfig.cnameRecord) {
-          records.push({
-            type: 'CNAME',
-            name: vercelResult.dnsConfig.cnameRecord.name,
-            value: vercelResult.dnsConfig.cnameRecord.value,
-            description: 'Enregistrement CNAME pour www (Vercel)'
-          });
-        }
-        
-        // Add Vercel TXT verification if needed
-        if (vercelResult.dnsConfig.txtVerification) {
-          records.push({
-            type: 'TXT',
-            name: vercelResult.dnsConfig.txtVerification.name,
-            value: vercelResult.dnsConfig.txtVerification.value,
-            description: 'Enregistrement TXT de vérification Vercel (requis pour SSL)'
-          });
-        }
-        
-        if (records.length > 0) {
-          dnsInstructions.records = records;
-        }
-        
-        console.log(`✅ Domain ${domain} added to Vercel, DNS config retrieved`);
-      } else {
-        console.log(`⚠️ Vercel config failed: ${vercelResult.error}, using defaults`);
-      }
+    // Add TXT verification if Vercel requires it
+    if (vercelResult.verificationRequired?.length) {
+      const txtRecord = vercelResult.verificationRequired[0];
+      dnsInstructions.records.push({
+        type: 'TXT',
+        name: txtRecord.domain.replace(`.${domain}`, '') || '_vercel',
+        value: txtRecord.value,
+        description: 'Enregistrement TXT de vérification (requis pour SSL)'
+      });
     }
 
-    // Check for existing custom domain record
+    // Save to database
+    const verificationToken = crypto.randomUUID().replace(/-/g, '').substring(0, 16);
+
     const { data: existingDomain } = await supabaseAdmin
       .from('custom_domains')
       .select('*')
@@ -295,7 +268,6 @@ serve(async (req) => {
       .single();
 
     if (existingDomain) {
-      // Update existing
       await supabaseAdmin
         .from('custom_domains')
         .update({
@@ -309,7 +281,6 @@ serve(async (req) => {
         })
         .eq('id', existingDomain.id);
     } else {
-      // Create new
       await supabaseAdmin
         .from('custom_domains')
         .insert({
@@ -321,44 +292,37 @@ serve(async (req) => {
         });
     }
 
-    // Update deployment with Vercel project info if available
-    if (vercelProjectId) {
-      await supabaseAdmin
-        .from('deployments')
-        .update({ vercel_project_name: vercelProjectName })
-        .eq('id', deploymentId);
-    }
+    // Update deployment
+    await supabaseAdmin
+      .from('deployments')
+      .update({ 
+        vercel_project_name: vercelProjectName,
+        custom_domain: domain
+      })
+      .eq('id', deploymentId);
 
-    // Log the domain setup
+    // Log
     await supabaseAdmin.from('deployment_logs').insert({
       deployment_id: deploymentId,
       level: 'info',
-      message: `Custom domain ${domain} setup initiated`,
-      metadata: { 
-        domain, 
-        verificationToken,
-        vercelProjectName,
-        vercelProjectId 
-      }
+      message: `✅ Domain ${domain} automatically configured on Vercel`,
+      metadata: { domain, vercelProjectName, projectId: vercelResult.projectId }
     });
 
     return new Response(
       JSON.stringify({
         success: true,
         domain,
-        verificationToken,
-        vercelProjectId,
         dnsInstructions,
-        message: 'Configurez les enregistrements DNS ci-dessous, puis cliquez sur Vérifier.'
+        message: 'Domaine ajouté à Vercel automatiquement. Configurez les DNS ci-dessous puis cliquez Vérifier.'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error: unknown) {
     console.error('Verify domain error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Domain verification failed';
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Domain setup failed' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
