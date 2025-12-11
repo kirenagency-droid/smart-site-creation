@@ -11,7 +11,7 @@ interface VerifyDomainRequest {
   domain: string;
 }
 
-// Add domain to Vercel project - AUTOMATIC, user doesn't need Vercel access
+// Add domain to Vercel project with proper HTTPS configuration
 async function addDomainToVercel(
   domain: string, 
   projectName: string, 
@@ -23,7 +23,7 @@ async function addDomainToVercel(
   verificationRequired?: { type: string; domain: string; value: string }[];
   error?: string;
 }> {
-  console.log(`🔗 Adding domain ${domain} to Vercel project ${projectName} (AUTOMATIC)`);
+  console.log(`🔗 Adding domain ${domain} to Vercel project ${projectName}`);
   
   try {
     // 1. Get or create project
@@ -80,7 +80,7 @@ async function addDomainToVercel(
       console.log('Domain not found on any project (good)');
     }
 
-    // 3. Add domain to our project
+    // 3. Add main domain to project
     const addDomainResponse = await fetch(`https://api.vercel.com/v10/projects/${projectId}/domains`, {
       method: 'POST',
       headers: {
@@ -98,41 +98,29 @@ async function addDomainToVercel(
       return { success: false, error: addDomainData.error?.message || 'Failed to add domain' };
     }
 
-    // 4. Also add www subdomain as redirect
+    // 4. Add www subdomain with redirect to main domain (HTTPS)
     try {
-      await fetch(`https://api.vercel.com/v10/projects/${projectId}/domains`, {
+      const wwwResponse = await fetch(`https://api.vercel.com/v10/projects/${projectId}/domains`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${vercelToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name: `www.${domain}`, redirect: domain }),
+        body: JSON.stringify({ 
+          name: `www.${domain}`, 
+          redirect: domain,
+          redirectStatusCode: 308 // Permanent redirect preserving method
+        }),
       });
-      console.log(`✅ www.${domain} redirect configured`);
-    } catch {
-      console.log(`www subdomain setup skipped`);
-    }
-
-    // 5. Configure SSL redirect on the project (HTTP -> HTTPS)
-    try {
-      // Enable redirect to HTTPS for the domain
-      const redirectResponse = await fetch(
-        `https://api.vercel.com/v10/projects/${projectId}/domains/${domain}`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${vercelToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ redirect: null, redirectStatusCode: null }),
-        }
-      );
-      console.log(`✅ SSL redirect configuration attempted for ${domain}`);
+      
+      if (wwwResponse.ok || wwwResponse.status === 409) {
+        console.log(`✅ www.${domain} redirect to ${domain} configured`);
+      }
     } catch (e) {
-      console.log(`SSL redirect config skipped: ${e}`);
+      console.log(`www subdomain setup skipped: ${e}`);
     }
 
-    // 6. Get domain config to see what Vercel needs
+    // 5. Get domain config to verify SSL settings
     const configResponse = await fetch(
       `https://api.vercel.com/v9/projects/${projectId}/domains/${domain}`,
       { headers: { 'Authorization': `Bearer ${vercelToken}` } }
@@ -146,6 +134,9 @@ async function addDomainToVercel(
     if (!configData.verified && configData.verification?.length > 0) {
       verificationRequired = configData.verification;
     }
+
+    // Log SSL status
+    console.log(`🔒 SSL Certificate state: ${configData.sslCert?.state || 'not yet provisioned'}`);
 
     return { 
       success: true, 
@@ -198,7 +189,7 @@ serve(async (req) => {
     }
 
     const { deploymentId, domain }: VerifyDomainRequest = await req.json();
-    console.log(`=== AUTOMATIC DOMAIN SETUP: ${domain} ===`);
+    console.log(`=== DOMAIN SETUP: ${domain} ===`);
 
     // Check Pro plan
     const { data: canUseCustom } = await supabaseAdmin.rpc('can_use_custom_domain', {
@@ -230,7 +221,7 @@ serve(async (req) => {
     // Unique Vercel project per user project
     const vercelProjectName = `creali-${deployment.project_id.substring(0, 8)}`;
 
-    // AUTOMATIC: Add domain to Vercel
+    // Add domain to Vercel with proper HTTPS configuration
     const vercelResult = await addDomainToVercel(domain, vercelProjectName, vercelToken);
     
     if (!vercelResult.success) {
@@ -241,7 +232,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`✅ Domain ${domain} added to Vercel automatically`);
+    console.log(`✅ Domain ${domain} added to Vercel`);
 
     // Build DNS instructions
     const dnsInstructions = {
@@ -261,8 +252,8 @@ serve(async (req) => {
       ],
       notes: [
         'Ajoutez ces enregistrements chez votre registrar (Namecheap, GoDaddy, etc.)',
-        'La propagation peut prendre 5-60 minutes',
-        'Le HTTPS sera activé automatiquement une fois le DNS vérifié'
+        'La propagation DNS peut prendre 5-60 minutes',
+        'Le certificat HTTPS sera automatiquement provisionné une fois le DNS vérifié par Vercel'
       ]
     };
 
@@ -277,7 +268,7 @@ serve(async (req) => {
       });
     }
 
-    // Save to database
+    // Save to database - reset SSL status for fresh verification
     const verificationToken = crypto.randomUUID().replace(/-/g, '').substring(0, 16);
 
     const { data: existingDomain } = await supabaseAdmin
@@ -294,7 +285,7 @@ serve(async (req) => {
           verification_token: verificationToken,
           verification_status: 'pending',
           dns_configured: false,
-          ssl_provisioned: false,
+          ssl_provisioned: false, // Reset SSL for fresh check
           is_active: true,
           deactivation_reason: null
         })
@@ -307,7 +298,8 @@ serve(async (req) => {
           user_id: user.id,
           domain,
           verification_token: verificationToken,
-          verification_status: 'pending'
+          verification_status: 'pending',
+          ssl_provisioned: false
         });
     }
 
@@ -316,7 +308,8 @@ serve(async (req) => {
       .from('deployments')
       .update({ 
         vercel_project_name: vercelProjectName,
-        custom_domain: domain
+        custom_domain: domain,
+        ssl_status: 'pending' // Reset SSL status
       })
       .eq('id', deploymentId);
 
@@ -324,7 +317,7 @@ serve(async (req) => {
     await supabaseAdmin.from('deployment_logs').insert({
       deployment_id: deploymentId,
       level: 'info',
-      message: `✅ Domain ${domain} automatically configured on Vercel`,
+      message: `✅ Domain ${domain} configured on Vercel. Waiting for DNS verification and SSL provisioning.`,
       metadata: { domain, vercelProjectName, projectId: vercelResult.projectId }
     });
 
@@ -333,7 +326,7 @@ serve(async (req) => {
         success: true,
         domain,
         dnsInstructions,
-        message: 'Domaine ajouté à Vercel automatiquement. Configurez les DNS ci-dessous puis cliquez Vérifier.'
+        message: 'Domaine ajouté à Vercel. Configurez les DNS ci-dessous, puis cliquez Vérifier. Le HTTPS sera actif automatiquement une fois vérifié.'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
