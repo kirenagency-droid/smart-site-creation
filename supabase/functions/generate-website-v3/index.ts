@@ -543,7 +543,7 @@ serve(async (req) => {
     const detectedNiche = detectNiche(message);
     const nicheEnhancement = getNicheEnhancement(detectedNiche);
     const useVision = hasImageData(imageData);
-    const model = 'google/gemini-2.5-flash';
+    const model = 'openai/gpt-5';
     
     let systemPromptToUse: string;
     if (useVision) {
