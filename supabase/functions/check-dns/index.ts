@@ -20,12 +20,16 @@ interface DnsCheckResult {
 }
 
 // Remove domain from old Vercel projects before adding to new one
+// IMPORTANT: Must remove redirects (www) BEFORE removing the main domain
 async function removeDomainFromOldProjects(
   domain: string, 
   targetProjectName: string, 
   vercelToken: string
 ): Promise<{ removed: boolean; oldProject?: string; error?: string }> {
   console.log(`🔍 Searching for domain ${domain} on existing Vercel projects...`);
+  
+  // Domains to check and remove (www first, then root)
+  const domainsToRemove = [`www.${domain}`, domain];
   
   try {
     // List all projects
@@ -45,15 +49,17 @@ async function removeDomainFromOldProjects(
     
     console.log(`Found ${projects.length} Vercel projects`);
     
-    // Filter to creali- projects only
+    // Filter to creali- projects only (excluding target)
     const crealiProjects = projects.filter((p: { name: string }) => 
       p.name.startsWith('creali-') && p.name !== targetProjectName
     );
     
     console.log(`Checking ${crealiProjects.length} creali- projects (excluding target ${targetProjectName})`);
     
+    let removedFrom: string | undefined;
+    
     for (const project of crealiProjects) {
-      // Check if domain exists on this project
+      // Check if any of our domains exist on this project
       const domainsResponse = await fetch(`https://api.vercel.com/v10/projects/${project.id}/domains`, {
         headers: {
           'Authorization': `Bearer ${vercelToken}`,
@@ -66,53 +72,59 @@ async function removeDomainFromOldProjects(
       }
       
       const domainsData = await domainsResponse.json();
-      const domains = domainsData.domains || [];
+      const projectDomains = domainsData.domains || [];
       
-      // Check if our domain is on this project
-      const foundDomain = domains.find((d: { name: string }) => 
-        d.name === domain || d.name === `www.${domain}`
+      // Check if our domain or www variant is on this project
+      const hasOurDomain = projectDomains.some((d: { name: string }) => 
+        domainsToRemove.includes(d.name)
       );
       
-      if (foundDomain) {
-        console.log(`⚠️ Found domain ${domain} on old project ${project.name} - removing...`);
+      if (hasOurDomain) {
+        console.log(`⚠️ Found domain on old project ${project.name} - removing in cascade order...`);
         
-        // Remove the domain
-        const deleteResponse = await fetch(
-          `https://api.vercel.com/v9/projects/${project.id}/domains/${domain}`,
-          {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${vercelToken}`,
-            },
-          }
-        );
-        
-        if (deleteResponse.ok || deleteResponse.status === 404) {
-          console.log(`✅ Removed domain ${domain} from project ${project.name}`);
+        // CRITICAL: Remove in order - www FIRST (redirect), then root domain
+        for (const domToRemove of domainsToRemove) {
+          const existsOnProject = projectDomains.some((d: { name: string }) => d.name === domToRemove);
           
-          // Also try to remove www subdomain
-          try {
-            await fetch(
-              `https://api.vercel.com/v9/projects/${project.id}/domains/www.${domain}`,
-              {
-                method: 'DELETE',
-                headers: {
-                  'Authorization': `Bearer ${vercelToken}`,
-                },
-              }
-            );
-            console.log(`✅ Removed www.${domain} from project ${project.name}`);
-          } catch (e) {
-            // Ignore www removal errors
+          if (!existsOnProject) {
+            console.log(`  ${domToRemove} not found on project, skipping`);
+            continue;
           }
           
-          return { removed: true, oldProject: project.name };
-        } else {
-          const errorData = await deleteResponse.json();
-          console.error(`Failed to remove domain from ${project.name}:`, errorData);
-          return { removed: false, error: `Failed to remove from ${project.name}` };
+          console.log(`  Removing ${domToRemove} from ${project.name}...`);
+          
+          const deleteResponse = await fetch(
+            `https://api.vercel.com/v9/projects/${project.id}/domains/${domToRemove}`,
+            {
+              method: 'DELETE',
+              headers: {
+                'Authorization': `Bearer ${vercelToken}`,
+              },
+            }
+          );
+          
+          if (deleteResponse.ok || deleteResponse.status === 404) {
+            console.log(`  ✅ Removed ${domToRemove} from project ${project.name}`);
+          } else {
+            const errorData = await deleteResponse.json();
+            console.error(`  ❌ Failed to remove ${domToRemove}:`, errorData);
+            
+            // If it's a redirect error, we need to handle it
+            if (errorData.error?.code === 'domain_is_redirect') {
+              console.log(`  ${domToRemove} is a redirect target, continuing...`);
+            } else {
+              return { removed: false, error: `Failed to remove ${domToRemove}: ${errorData.error?.message}` };
+            }
+          }
         }
+        
+        removedFrom = project.name;
+        console.log(`✅ Cascade removal complete from ${project.name}`);
       }
+    }
+    
+    if (removedFrom) {
+      return { removed: true, oldProject: removedFrom };
     }
     
     console.log(`✅ Domain ${domain} not found on any other creali- projects`);
