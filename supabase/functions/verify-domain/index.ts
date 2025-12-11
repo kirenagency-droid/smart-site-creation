@@ -59,7 +59,53 @@ async function addDomainToVercel(
     
     console.log(`✅ Using Vercel project: ${projectId}`);
 
-    // 2. Check if domain is on another project and remove it
+    // 2. Force remove domain from ALL other projects
+    console.log(`🔍 Checking if domain ${domain} exists on any Vercel project...`);
+    
+    // First, list ALL projects to find where this domain might be
+    try {
+      const projectsResponse = await fetch(`https://api.vercel.com/v9/projects?limit=100`, {
+        headers: { 'Authorization': `Bearer ${vercelToken}` },
+      });
+      
+      if (projectsResponse.ok) {
+        const projectsData = await projectsResponse.json();
+        const projects = projectsData.projects || [];
+        
+        for (const proj of projects) {
+          if (proj.id === projectId) continue; // Skip current project
+          
+          // Check if this project has our domain
+          const domainsResponse = await fetch(`https://api.vercel.com/v9/projects/${proj.id}/domains`, {
+            headers: { 'Authorization': `Bearer ${vercelToken}` },
+          });
+          
+          if (domainsResponse.ok) {
+            const domainsData = await domainsResponse.json();
+            const domains = domainsData.domains || [];
+            
+            for (const d of domains) {
+              if (d.name === domain || d.name === `www.${domain}`) {
+                console.log(`⚠️ Found ${d.name} on project ${proj.name} (${proj.id}), removing...`);
+                const deleteResponse = await fetch(`https://api.vercel.com/v10/projects/${proj.id}/domains/${d.name}`, {
+                  method: 'DELETE',
+                  headers: { 'Authorization': `Bearer ${vercelToken}` },
+                });
+                if (deleteResponse.ok) {
+                  console.log(`✅ Removed ${d.name} from project ${proj.name}`);
+                } else {
+                  console.log(`⚠️ Could not remove ${d.name}: ${await deleteResponse.text()}`);
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.log(`Domain removal check error: ${e}`);
+    }
+    
+    // Also try direct domain lookup
     try {
       const domainCheckResponse = await fetch(`https://api.vercel.com/v9/domains/${domain}`, {
         headers: { 'Authorization': `Bearer ${vercelToken}` },
@@ -68,16 +114,21 @@ async function addDomainToVercel(
       if (domainCheckResponse.ok) {
         const domainData = await domainCheckResponse.json();
         if (domainData.projectId && domainData.projectId !== projectId) {
-          console.log(`⚠️ Domain on old project ${domainData.projectId}, removing...`);
+          console.log(`⚠️ Domain registered on project ${domainData.projectId}, forcing removal...`);
           await fetch(`https://api.vercel.com/v10/projects/${domainData.projectId}/domains/${domain}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${vercelToken}` },
           });
-          console.log(`✅ Removed from old project`);
+          // Also remove www
+          await fetch(`https://api.vercel.com/v10/projects/${domainData.projectId}/domains/www.${domain}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${vercelToken}` },
+          });
+          console.log(`✅ Force removed domain from old project`);
         }
       }
     } catch (e) {
-      console.log('Domain not found on any project (good)');
+      console.log('Domain lookup skipped');
     }
 
     // 3. Add main domain to project
