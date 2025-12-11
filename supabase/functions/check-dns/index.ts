@@ -89,7 +89,7 @@ async function checkDnsPropagation(domain: string): Promise<{
   };
 }
 
-// Force SSL provisioning by removing and re-adding domain
+// Force SSL provisioning by removing and re-adding domain + www
 async function forceSSLProvisioning(
   domain: string,
   projectId: string,
@@ -113,7 +113,7 @@ async function forceSSLProvisioning(
       // Wait a moment
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Re-add domain
+      // Re-add root domain
       const addResponse = await fetch(
         `https://api.vercel.com/v10/projects/${projectId}/domains`,
         {
@@ -127,7 +127,26 @@ async function forceSSLProvisioning(
       );
       
       if (addResponse.ok || addResponse.status === 409) {
-        console.log(`✅ Domain re-added, SSL should re-provision`);
+        console.log(`✅ Root domain re-added`);
+        
+        // Also add www subdomain with redirect to root
+        const wwwResponse = await fetch(
+          `https://api.vercel.com/v10/projects/${projectId}/domains`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${vercelToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ name: `www.${domain}`, redirect: domain }),
+          }
+        );
+        
+        if (wwwResponse.ok || wwwResponse.status === 409) {
+          console.log(`✅ www.${domain} added with redirect`);
+        }
+        
+        console.log(`✅ SSL should re-provision`);
         return true;
       }
     }
@@ -250,6 +269,11 @@ serve(async (req) => {
       } else if (vercelStatus.sslState === 'failed') {
         message = '❌ Le certificat SSL a échoué. Cliquez Vérifier pour réessayer.';
         // Try to force re-provisioning
+        await forceSSLProvisioning(domain, project.id, vercelToken);
+      } else if (vercelStatus.sslState === null) {
+        // SSL never requested - force provisioning now
+        message = '⏳ Domaine vérifié, démarrage du provisionnement SSL...';
+        console.log(`🔄 SSL state is null, forcing provisioning for ${domain}`);
         await forceSSLProvisioning(domain, project.id, vercelToken);
       } else {
         message = '⏳ DNS vérifié, en attente du certificat SSL...';
