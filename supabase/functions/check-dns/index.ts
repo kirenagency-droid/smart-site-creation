@@ -136,9 +136,65 @@ async function removeDomainFromOldProjects(
   }
 }
 
+// Check Vercel domain status for SSL/verification
+async function checkVercelDomainStatus(domain: string, projectId: string, vercelToken: string): Promise<{
+  verified: boolean;
+  sslReady: boolean;
+  verification?: { type: string; domain: string; value: string }[];
+  error?: string;
+}> {
+  console.log(`🔍 Checking Vercel domain status for ${domain} on project ${projectId}`);
+  
+  try {
+    const response = await fetch(
+      `https://api.vercel.com/v9/projects/${projectId}/domains/${domain}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${vercelToken}`,
+        },
+      }
+    );
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Failed to get domain status:', errorData);
+      return { verified: false, sslReady: false, error: errorData.error?.message || 'Failed to check domain' };
+    }
+    
+    const data = await response.json();
+    console.log(`Vercel domain status for ${domain}:`, JSON.stringify(data, null, 2));
+    
+    // Check verification status
+    const isVerified = data.verified === true;
+    const sslReady = isVerified; // SSL is auto-provisioned once verified
+    
+    // If not verified, extract verification requirements
+    let verificationRequirements: { type: string; domain: string; value: string }[] | undefined;
+    
+    if (!isVerified && data.verification) {
+      verificationRequirements = data.verification.map((v: { type: string; domain: string; value: string }) => ({
+        type: v.type,
+        domain: v.domain,
+        value: v.value,
+      }));
+      console.log(`Vercel requires verification:`, verificationRequirements);
+    }
+    
+    return {
+      verified: isVerified,
+      sslReady,
+      verification: verificationRequirements,
+    };
+  } catch (error) {
+    console.error('Error checking Vercel domain status:', error);
+    return { verified: false, sslReady: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
 // Add domain to Vercel project
 async function addDomainToVercel(domain: string, projectName: string, vercelToken: string): Promise<{
   success: boolean;
+  projectId?: string;
   error?: string;
 }> {
   console.log(`🔗 Adding domain ${domain} to Vercel project ${projectName}`);
@@ -198,7 +254,7 @@ async function addDomainToVercel(domain: string, projectName: string, vercelToke
           
           if (existingDomain) {
             console.log(`✅ Domain ${domain} is already on the correct project ${projectName}`);
-            return { success: true };
+            return { success: true, projectId: project.id };
           }
         }
         
@@ -260,7 +316,7 @@ async function addDomainToVercel(domain: string, projectName: string, vercelToke
           const finalData = await finalCheckResponse.json();
           if (finalData.domains?.some((d: { name: string }) => d.name === domain)) {
             console.log(`✅ Domain ${domain} confirmed on correct project`);
-            return { success: true };
+            return { success: true, projectId: project.id };
           }
         }
         
@@ -291,7 +347,7 @@ async function addDomainToVercel(domain: string, projectName: string, vercelToke
       console.log(`Note: www subdomain setup skipped (may already exist)`);
     }
     
-    return { success: true };
+    return { success: true, projectId: project.id };
   } catch (error) {
     console.error('Vercel API error:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -423,6 +479,8 @@ serve(async (req) => {
       const vercelToken = Deno.env.get('VERCEL_TOKEN');
       let vercelConfigured = false;
       let vercelError: string | null = null;
+      let sslReady = false;
+      let vercelVerification: { type: string; domain: string; value: string }[] | undefined;
 
       if (vercelToken && deployment) {
         // Use stored vercel_project_name or derive from project_id
@@ -435,21 +493,39 @@ serve(async (req) => {
         vercelConfigured = vercelResult.success;
         vercelError = vercelResult.error || null;
         
+        // If domain was added, check the actual SSL/verification status
+        if (vercelConfigured && vercelResult.projectId) {
+          console.log(`🔍 Checking real SSL status from Vercel...`);
+          const domainStatus = await checkVercelDomainStatus(customDomain.domain, vercelResult.projectId, vercelToken);
+          
+          sslReady = domainStatus.sslReady;
+          vercelVerification = domainStatus.verification;
+          
+          if (domainStatus.verified) {
+            console.log(`✅ Vercel confirms domain is verified - SSL is active`);
+          } else if (domainStatus.verification) {
+            console.log(`⚠️ Vercel requires additional verification:`, domainStatus.verification);
+          }
+        }
+        
         await supabaseAdmin.from('deployment_logs').insert({
           deployment_id: deploymentId,
-          level: vercelConfigured ? 'success' : 'warning',
+          level: vercelConfigured ? (sslReady ? 'success' : 'info') : 'warning',
           message: vercelConfigured 
-            ? `Domain ${customDomain.domain} configured on Vercel` 
+            ? (sslReady 
+                ? `Domain ${customDomain.domain} fully verified with SSL active` 
+                : `Domain ${customDomain.domain} added to Vercel - awaiting SSL provisioning`)
             : `Vercel domain config: ${vercelError}`,
         });
       }
 
+      // Update custom_domains with REAL SSL status
       await supabaseAdmin
         .from('custom_domains')
         .update({
-          verification_status: 'verified',
+          verification_status: sslReady ? 'verified' : 'verifying',
           dns_configured: true,
-          ssl_provisioned: vercelConfigured
+          ssl_provisioned: sslReady
         })
         .eq('id', customDomain.id);
 
@@ -457,28 +533,43 @@ serve(async (req) => {
       await supabaseAdmin
         .from('deployments')
         .update({
-          status: 'deployed',
+          status: sslReady ? 'deployed' : 'pending',
           deployment_url: `https://${customDomain.domain}`,
-          ssl_status: vercelConfigured ? 'active' : 'pending'
+          ssl_status: sslReady ? 'active' : 'pending'
         })
         .eq('id', deploymentId);
 
       await supabaseAdmin.from('deployment_logs').insert({
         deployment_id: deploymentId,
-        level: 'success',
-        message: `Domain ${customDomain.domain} verified${vercelConfigured ? ' and configured on Vercel' : ''}`,
+        level: sslReady ? 'success' : 'info',
+        message: sslReady 
+          ? `Domain ${customDomain.domain} verified with HTTPS active`
+          : `Domain ${customDomain.domain} DNS verified, SSL pending`,
       });
 
+      // Build response with verification instructions if needed
+      const response: Record<string, unknown> = {
+        success: true,
+        verified: true,
+        vercelConfigured,
+        sslReady,
+        details: dnsCheckResult.details,
+        message: sslReady 
+          ? '🎉 Domaine vérifié et HTTPS actif ! Votre site est en ligne.'
+          : vercelVerification 
+            ? '⚠️ Vercel nécessite une vérification supplémentaire pour le SSL.'
+            : 'DNS vérifié ! SSL en cours de provisionnement (peut prendre quelques minutes)...'
+      };
+
+      // Include Vercel verification instructions if SSL not ready
+      if (vercelVerification && vercelVerification.length > 0) {
+        response.vercelVerification = vercelVerification;
+        response.vercelVerificationInstructions = 
+          `Ajoutez un enregistrement ${vercelVerification[0].type} pour "${vercelVerification[0].domain}" avec la valeur "${vercelVerification[0].value}"`;
+      }
+
       return new Response(
-        JSON.stringify({
-          success: true,
-          verified: true,
-          vercelConfigured,
-          details: dnsCheckResult.details,
-          message: vercelConfigured 
-            ? '🎉 Domaine vérifié et configuré ! Votre site est en ligne.'
-            : 'Domaine vérifié ! Configuration Vercel en cours...'
-        }),
+        JSON.stringify(response),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } else {
