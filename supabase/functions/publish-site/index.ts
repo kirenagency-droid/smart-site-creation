@@ -180,7 +180,9 @@ serve(async (req) => {
 
     // Prepare files for Vercel deployment
     const htmlContent = project.current_html;
-    const projectName = `creali-${subdomain || project.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+    
+    // Generate unique Vercel project name based on projectId (first 8 chars)
+    const vercelProjectName = `creali-${projectId.substring(0, 8)}`;
     
     // For Vercel v13 API, we need to use the file upload approach
     // Convert HTML to Uint8Array for proper encoding
@@ -198,7 +200,7 @@ serve(async (req) => {
       }
     ];
 
-    console.log(`Deploying to Vercel: ${projectName}`);
+    console.log(`Deploying to Vercel: ${vercelProjectName}`);
 
     // Create Vercel deployment
     const vercelResponse = await fetch('https://api.vercel.com/v13/deployments', {
@@ -208,7 +210,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        name: projectName,
+        name: vercelProjectName,
         files: files,
         projectSettings: {
           framework: null,
@@ -258,7 +260,7 @@ serve(async (req) => {
       metadata: { vercelId: vercelDeploymentId, url: deploymentUrl }
     });
 
-    // Update deployment with success
+    // Update deployment with success (including vercel_project_name for domain config)
     const { data: finalDeployment, error: finalError } = await supabaseAdmin
       .from('deployments')
       .update({
@@ -267,6 +269,7 @@ serve(async (req) => {
         external_deployment_id: vercelDeploymentId,
         last_deployed_at: new Date().toISOString(),
         ssl_status: 'active',
+        vercel_project_name: vercelProjectName,
       })
       .eq('id', deploymentId)
       .select()
