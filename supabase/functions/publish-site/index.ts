@@ -179,7 +179,20 @@ serve(async (req) => {
     });
 
     // Prepare files for Vercel deployment
-    const htmlContent = project.current_html;
+    let htmlContent = project.current_html;
+    
+    // Inject HTTPS redirect script at the beginning of <head> to force secure connection
+    const httpsRedirectScript = `<script>if(location.protocol!=='https:'&&location.hostname!=='localhost'){location.replace('https://'+location.host+location.pathname+location.search)}</script>`;
+    
+    // Insert the script right after <head> tag
+    if (htmlContent.includes('<head>')) {
+      htmlContent = htmlContent.replace('<head>', `<head>\n${httpsRedirectScript}`);
+    } else if (htmlContent.includes('<HEAD>')) {
+      htmlContent = htmlContent.replace('<HEAD>', `<HEAD>\n${httpsRedirectScript}`);
+    } else {
+      // If no head tag, prepend the script
+      htmlContent = httpsRedirectScript + htmlContent;
+    }
     
     // Generate unique Vercel project name based on projectId (first 8 chars)
     const vercelProjectName = `creali-${projectId.substring(0, 8)}`;
