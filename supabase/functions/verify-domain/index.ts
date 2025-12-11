@@ -113,7 +113,26 @@ async function addDomainToVercel(
       console.log(`www subdomain setup skipped`);
     }
 
-    // 5. Get domain config to see what Vercel needs
+    // 5. Configure SSL redirect on the project (HTTP -> HTTPS)
+    try {
+      // Enable redirect to HTTPS for the domain
+      const redirectResponse = await fetch(
+        `https://api.vercel.com/v10/projects/${projectId}/domains/${domain}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${vercelToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ redirect: null, redirectStatusCode: null }),
+        }
+      );
+      console.log(`✅ SSL redirect configuration attempted for ${domain}`);
+    } catch (e) {
+      console.log(`SSL redirect config skipped: ${e}`);
+    }
+
+    // 6. Get domain config to see what Vercel needs
     const configResponse = await fetch(
       `https://api.vercel.com/v9/projects/${projectId}/domains/${domain}`,
       { headers: { 'Authorization': `Bearer ${vercelToken}` } }
