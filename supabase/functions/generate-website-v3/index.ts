@@ -474,7 +474,7 @@ serve(async (req) => {
     // Detect mode and build prompt
     const mode = detectMode(message, !!currentHtml);
     const useVision = hasImageData(imageData);
-    const model = 'google/gemini-2.5-pro';
+    const model = 'gpt-4.1-2025-04-14';
     
     let systemPromptToUse: string;
     if (useVision) {
