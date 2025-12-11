@@ -10,35 +10,7 @@ interface CheckDnsRequest {
   deploymentId: string;
 }
 
-// Actually test if HTTPS works by checking if we can connect
-async function checkSslCertificate(domain: string): Promise<boolean> {
-  try {
-    console.log(`🔒 Testing SSL for https://${domain}...`);
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    
-    const response = await fetch(`https://${domain}`, {
-      method: 'HEAD',
-      signal: controller.signal,
-    });
-    
-    clearTimeout(timeoutId);
-    
-    // If we get any response (even 404), SSL is working
-    console.log(`✅ SSL check passed - status ${response.status}`);
-    return true;
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-    console.log(`❌ SSL check failed: ${errorMsg}`);
-    // If it's an abort, SSL might still work but timeout
-    if (errorMsg.includes('abort')) {
-      return false;
-    }
-    return false;
-  }
-}
-
-// Check Vercel domain status
+// Check Vercel domain status INCLUDING SSL certificate status
 async function getVercelDomainStatus(
   domain: string, 
   projectId: string, 
@@ -46,6 +18,8 @@ async function getVercelDomainStatus(
 ): Promise<{
   verified: boolean;
   misconfigured: boolean;
+  sslState: string | null;
+  sslReady: boolean;
   error?: string;
 }> {
   console.log(`🔍 Checking Vercel status for ${domain}`);
@@ -59,19 +33,28 @@ async function getVercelDomainStatus(
     if (!response.ok) {
       const errorData = await response.json();
       console.error('Vercel API error:', errorData);
-      return { verified: false, misconfigured: true, error: errorData.error?.message };
+      return { verified: false, misconfigured: true, sslState: null, sslReady: false, error: errorData.error?.message };
     }
     
     const data = await response.json();
     console.log(`Vercel domain status:`, JSON.stringify(data, null, 2));
     
+    // Check SSL certificate state from Vercel API
+    // sslCert can be: null, { state: 'pending' }, { state: 'issued' }, { state: 'failed' }
+    const sslState = data.sslCert?.state || null;
+    const sslReady = sslState === 'issued';
+    
+    console.log(`🔒 SSL State from Vercel: ${sslState}, Ready: ${sslReady}`);
+    
     return {
       verified: data.verified === true,
       misconfigured: data.misconfigured === true,
+      sslState,
+      sslReady,
     };
   } catch (error) {
     console.error('Error checking Vercel:', error);
-    return { verified: false, misconfigured: true };
+    return { verified: false, misconfigured: true, sslState: null, sslReady: false };
   }
 }
 
@@ -104,6 +87,56 @@ async function checkDnsPropagation(domain: string): Promise<{
     aRecord: { found: !!aRecord, value: aRecord },
     pointingToVercel: !!isVercelIp,
   };
+}
+
+// Force SSL provisioning by removing and re-adding domain
+async function forceSSLProvisioning(
+  domain: string,
+  projectId: string,
+  vercelToken: string
+): Promise<boolean> {
+  console.log(`🔄 Forcing SSL re-provisioning for ${domain}`);
+  
+  try {
+    // Remove domain
+    const removeResponse = await fetch(
+      `https://api.vercel.com/v10/projects/${projectId}/domains/${domain}`,
+      {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${vercelToken}` },
+      }
+    );
+    
+    if (removeResponse.ok || removeResponse.status === 404) {
+      console.log(`✅ Domain removed, re-adding...`);
+      
+      // Wait a moment
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Re-add domain
+      const addResponse = await fetch(
+        `https://api.vercel.com/v10/projects/${projectId}/domains`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${vercelToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ name: domain }),
+        }
+      );
+      
+      if (addResponse.ok || addResponse.status === 409) {
+        console.log(`✅ Domain re-added, SSL should re-provision`);
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Force SSL error:', error);
+    return false;
+  }
 }
 
 serve(async (req) => {
@@ -199,23 +232,28 @@ serve(async (req) => {
     // Check DNS propagation
     const dnsStatus = await checkDnsPropagation(domain);
 
-    // Check Vercel verification status
+    // Check Vercel verification AND SSL status via API (the real source of truth)
     const vercelStatus = await getVercelDomainStatus(domain, project.id, vercelToken);
 
-    // ACTUALLY test SSL - don't trust Vercel's "verified" for SSL
-    let sslReady = false;
-    if (vercelStatus.verified && dnsStatus.pointingToVercel) {
-      sslReady = await checkSslCertificate(domain);
-    }
+    // SSL is ready ONLY if Vercel API says sslCert.state === 'issued'
+    const sslReady = vercelStatus.sslReady;
 
     let message: string;
     let status: 'pending' | 'verifying' | 'verified';
 
     if (sslReady) {
-      message = '🎉 Domaine vérifié et HTTPS actif ! Votre site est en ligne.';
+      message = '🎉 Domaine vérifié et HTTPS actif ! Votre site est en ligne avec un certificat SSL valide.';
       status = 'verified';
     } else if (vercelStatus.verified && dnsStatus.pointingToVercel) {
-      message = '⏳ DNS vérifié, certificat SSL en cours de provisionnement (2-10 min)...';
+      if (vercelStatus.sslState === 'pending') {
+        message = '⏳ DNS vérifié, certificat SSL en cours de provisionnement par Vercel (peut prendre 2-10 min)...';
+      } else if (vercelStatus.sslState === 'failed') {
+        message = '❌ Le certificat SSL a échoué. Cliquez Vérifier pour réessayer.';
+        // Try to force re-provisioning
+        await forceSSLProvisioning(domain, project.id, vercelToken);
+      } else {
+        message = '⏳ DNS vérifié, en attente du certificat SSL...';
+      }
       status = 'verifying';
     } else if (dnsStatus.pointingToVercel) {
       message = '⏳ DNS détecté, en attente de vérification Vercel...';
@@ -228,13 +266,13 @@ serve(async (req) => {
       status = 'pending';
     }
 
-    // Update database - only mark SSL as ready if we ACTUALLY tested it
+    // Update database - SSL ready only when Vercel confirms 'issued'
     await supabaseAdmin
       .from('custom_domains')
       .update({
         verification_status: status,
         dns_configured: dnsStatus.pointingToVercel,
-        ssl_provisioned: sslReady // Only true if SSL actually works
+        ssl_provisioned: sslReady
       })
       .eq('id', customDomain.id);
 
@@ -254,19 +292,20 @@ serve(async (req) => {
       await supabaseAdmin.from('deployment_logs').insert({
         deployment_id: deploymentId,
         level: 'success',
-        message: `🎉 ${domain} is live with HTTPS!`,
-        metadata: { domain, sslReady: true, sslVerified: true }
+        message: `🎉 ${domain} is live with HTTPS! SSL certificate issued by Vercel.`,
+        metadata: { domain, sslReady: true, sslState: vercelStatus.sslState }
       });
     } else {
       // Log status
       await supabaseAdmin.from('deployment_logs').insert({
         deployment_id: deploymentId,
         level: 'info',
-        message: `DNS: ${status}, SSL: ${sslReady ? 'active' : 'pending'}`,
+        message: `DNS: ${status}, SSL state: ${vercelStatus.sslState || 'none'}`,
         metadata: { 
           domain, 
           dnsPointingToVercel: dnsStatus.pointingToVercel,
           vercelVerified: vercelStatus.verified,
+          sslState: vercelStatus.sslState,
           sslReady 
         }
       });
@@ -277,6 +316,7 @@ serve(async (req) => {
         success: true,
         verified: vercelStatus.verified,
         sslReady,
+        sslState: vercelStatus.sslState,
         dnsConfigured: dnsStatus.pointingToVercel,
         details: {
           aRecord: {
@@ -284,6 +324,10 @@ serve(async (req) => {
             value: dnsStatus.aRecord.value,
             pointingToVercel: dnsStatus.pointingToVercel,
             expected: '76.76.21.21'
+          },
+          ssl: {
+            state: vercelStatus.sslState,
+            ready: sslReady
           }
         },
         message

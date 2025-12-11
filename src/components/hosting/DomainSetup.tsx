@@ -45,6 +45,7 @@ export const DomainSetup = ({ projectId, onClose }: DomainSetupProps) => {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [sslReady, setSslReady] = useState(customDomain?.sslProvisioned || false);
   const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
+  const [isChangingDomain, setIsChangingDomain] = useState(false);
 
   const handleSetupDomain = async () => {
     const cleaned = cleanDomain(domain);
@@ -199,9 +200,9 @@ export const DomainSetup = ({ projectId, onClose }: DomainSetupProps) => {
                   placeholder="monsite.com"
                   value={domain}
                   onChange={(e) => setDomain(e.target.value)}
-                  disabled={!!customDomain?.domain || isSettingUp}
+                  disabled={isSettingUp || (!!customDomain?.domain && !isChangingDomain)}
                 />
-                {!customDomain?.domain && (
+                {(!customDomain?.domain || isChangingDomain) ? (
                   <Button 
                     onClick={handleSetupDomain} 
                     disabled={isSettingUp || !domain}
@@ -212,8 +213,23 @@ export const DomainSetup = ({ projectId, onClose }: DomainSetupProps) => {
                       'Configurer'
                     )}
                   </Button>
+                ) : (
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setIsChangingDomain(true);
+                      setDomain('');
+                    }}
+                  >
+                    Changer
+                  </Button>
                 )}
               </div>
+              {customDomain?.domain && !isChangingDomain && (
+                <p className="text-xs text-muted-foreground">
+                  Domaine actuel : {customDomain.domain}
+                </p>
+              )}
             </div>
           )}
 
