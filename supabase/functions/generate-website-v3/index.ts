@@ -39,6 +39,20 @@ const REPAIR_PATTERNS = [
   /pourquoi\s*(ça|ca)\s*(ne)?\s*(marche|fonctionne)\s*pas/i
 ];
 
+// Niche detection patterns
+const NICHE_PATTERNS: Record<string, RegExp[]> = {
+  'tech-saas': [/saas|tech|startup|application|logiciel|software|app|plateforme|api|cloud/i],
+  'coaching': [/coach|coaching|formation|mentor|accompagnement|développement personnel|consultant|formateur/i],
+  'wellness': [/spa|bien-être|wellness|massage|relaxation|yoga|méditation|beauté|soin/i],
+  'fitness': [/fitness|sport|gym|musculation|entraînement|coach sportif|personal trainer|crossfit/i],
+  'restaurant': [/restaurant|food|cuisine|gastronomie|chef|bistrot|café|brasserie|traiteur/i],
+  'luxury': [/luxe|premium|prestige|haut de gamme|exclusif|bijoux|joaillerie/i],
+  'ecommerce': [/boutique|shop|e-commerce|vente|produits|magasin|store|achat/i],
+  'real-estate': [/immobilier|real estate|agent|maison|appartement|propriété|investissement/i],
+  'agency': [/agence|agency|creative|design|branding|marketing|digital|studio/i],
+  'medical': [/médecin|clinique|santé|medical|docteur|cabinet|soins/i]
+};
+
 function isUndoCommand(message: string): boolean {
   return UNDO_PATTERNS.some(pattern => pattern.test(message));
 }
@@ -48,16 +62,22 @@ function isListVersionsCommand(message: string): boolean {
 }
 
 function detectMode(message: string, hasExistingHtml: boolean): 'repair' | 'creative' {
-  // Check for explicit repair indicators
   if (REPAIR_PATTERNS.some(pattern => pattern.test(message))) {
     return 'repair';
   }
-  // New site = always creative
   if (!hasExistingHtml) {
     return 'creative';
   }
-  // Default to creative for modifications
   return 'creative';
+}
+
+function detectNiche(message: string): string | null {
+  for (const [niche, patterns] of Object.entries(NICHE_PATTERNS)) {
+    if (patterns.some(pattern => pattern.test(message))) {
+      return niche;
+    }
+  }
+  return null;
 }
 
 function hasImageData(imageData: string | null): boolean {
@@ -89,10 +109,11 @@ function validateAndFixHtml(html: string): string {
   if (!fixedHtml.includes('fonts.googleapis.com') || !fixedHtml.includes('Inter')) {
     fixedHtml = fixedHtml.replace(
       '</head>',
-      `  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+      `  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     * { font-family: 'Inter', sans-serif; scroll-behavior: smooth; }
     .font-serif { font-family: 'Playfair Display', serif; }
+    .font-display { font-family: 'Space Grotesk', sans-serif; }
   </style>\n</head>`
     );
   }
@@ -106,8 +127,96 @@ function sendSSE(controller: ReadableStreamDefaultController, event: object) {
   controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
 }
 
+// Get niche-specific prompt enhancement
+function getNicheEnhancement(niche: string | null): string {
+  const nicheConfigs: Record<string, string> = {
+    'tech-saas': `
+### NICHE: TECH/SAAS 🚀
+- Background: bg-[#0a0a0f] (dark)
+- Accent: #8b5cf6 (violet) ou #3b82f6 (bleu)
+- Style: Glassmorphism, gradients, effets néon subtils
+- Sections: Hero avec produit, Features grid, How it works, Integrations, Pricing, Testimonials entreprises
+- Vocabulaire: automatiser, scaler, intégrer, workflow, productivité, ROI`,
+    
+    'coaching': `
+### NICHE: COACHING/FORMATION 🎯
+- Background: bg-gradient-to-br from-gray-900 via-indigo-950 to-gray-900
+- Accent: #f59e0b (amber) - énergie et confiance
+- Style: Inspirant, photos personnelles, témoignages de transformation
+- Sections: Hero avec coach, Problèmes clients, Méthode, Programmes, Résultats chiffrés, À propos, Booking
+- Vocabulaire: transformer, débloquer, potentiel, accompagnement personnalisé, résultats concrets`,
+    
+    'wellness': `
+### NICHE: BIEN-ÊTRE/SPA 🧘
+- Background: bg-[#fefdfb] (crème clair)
+- Accent: #7c9a82 (vert sauge) ou #c4a77d (terracotta)
+- Style: Épuré, zen, beaucoup d'espace blanc, photos atmosphériques
+- Typographie: Titres en serif (Playfair Display)
+- Sections: Hero zen, Services/Soins, Expérience, Galerie, Tarifs, Réservation
+- Vocabulaire: sérénité, harmonie, ressourcement, évasion, équilibre`,
+    
+    'fitness': `
+### NICHE: FITNESS/SPORT 💪
+- Background: bg-[#0f0f0f] (noir intense)
+- Accent: #ef4444 (rouge) ou #f97316 (orange)
+- Style: Bold, énergique, photos d'action, typographie uppercase
+- Sections: Hero impactant, Programmes, Avant/Après, Équipements, Tarifs, Témoignages transformation
+- Vocabulaire: dépasser ses limites, résultats, intensité, performance, discipline`,
+    
+    'restaurant': `
+### NICHE: RESTAURANT/FOOD 🍽️
+- Background: bg-[#fffbf5] (blanc chaud)
+- Accent: #d97706 (amber) ou #dc2626 (rouge)
+- Style: Chaleureux, photos food en grand format, serif pour les titres
+- Sections: Hero avec plat signature, Notre cuisine, Menu, Galerie, Notre histoire, Chef, Réservation
+- Vocabulaire: saveurs, fraîcheur, passion, terroir, fait maison, authenticité`,
+    
+    'luxury': `
+### NICHE: LUXE/PREMIUM ✨
+- Background: bg-[#0c0c0c] (noir profond)
+- Accent: #c9a962 (or) - touches subtiles
+- Style: Ultra-minimaliste, espace généreux, serif élégant, parallax
+- Sections: Hero cinématique, Collections, Savoir-faire, Héritage, Services privés
+- Vocabulaire: excellence, exclusivité, raffinement, sur-mesure, héritage`,
+    
+    'ecommerce': `
+### NICHE: E-COMMERCE 🛒
+- Background: bg-white (clean)
+- Accent: Couleur de marque
+- Style: Clean, focus produit, trust badges, grid de produits
+- Sections: Hero produit phare, Catégories, Bestsellers, Avantages, Avis clients, Newsletter
+- Vocabulaire: livraison rapide, satisfait ou remboursé, paiement sécurisé, qualité premium`,
+    
+    'real-estate': `
+### NICHE: IMMOBILIER 🏠
+- Background: bg-[#f8f7f4] (beige élégant)
+- Accent: #166534 (vert) ou #b8860b (doré)
+- Style: Professionnel, photos immobilières grand format, confiance
+- Sections: Hero propriété, Services, Biens, Estimation gratuite, Témoignages, Équipe, Zones
+- Vocabulaire: accompagnement, expertise locale, estimation gratuite, bien d'exception`,
+    
+    'agency': `
+### NICHE: AGENCE CRÉATIVE 🎨
+- Background: bg-[#0a0a0a] (noir)
+- Accent: #ec4899 (rose) ou #06b6d4 (cyan) - UN seul accent fort
+- Style: Bold, portfolio interactif, animations avancées, typographie expressive
+- Sections: Hero statement, Services, Portfolio/Cases, Process, Clients logos, Équipe
+- Vocabulaire: impact, créativité, stratégie, sur-mesure, innovation`,
+    
+    'medical': `
+### NICHE: MÉDICAL/SANTÉ 🏥
+- Background: bg-white
+- Accent: #0891b2 (cyan) ou #059669 (emerald)
+- Style: Professionnel, rassurant, photos de l'équipe souriante
+- Sections: Hero praticien, Spécialités, Équipe, Prendre RDV, Parcours patient, FAQ santé
+- Vocabulaire: expertise, accompagnement, soins personnalisés, votre santé`
+  };
+  
+  return niche ? nicheConfigs[niche] || '' : '';
+}
+
 // ============================================
-// SYSTEM PROMPTS - Lovable Quality Level
+// SYSTEM PROMPTS - Enhanced with Multi-Step Reasoning
 // ============================================
 
 const CREALI_PERSONA = `Tu es Creali, un designer/développeur web d'élite passionné et perfectionniste.
@@ -117,7 +226,46 @@ const CREALI_PERSONA = `Tu es Creali, un designer/développeur web d'élite pass
 - Tu es chaleureux, encourageant et tu donnes des conseils proactifs
 - Tu poses des questions si le brief est flou plutôt que de deviner
 - Tu expliques tes choix de design avec enthousiasme
-- Tu utilises des emojis avec parcimonie (2-3 max)`;
+- Tu utilises des emojis avec parcimonie (2-3 max)
+- Tu es proactif et proposes des améliorations`;
+
+const MULTI_STEP_REASONING = `
+## 🧠 PROCESSUS DE RAISONNEMENT EN 5 ÉTAPES (OBLIGATOIRE dans <thinking>)
+
+### ÉTAPE 1: COMPRÉHENSION 📋
+- Reformule la demande de l'utilisateur dans tes propres mots
+- Identifie l'objectif principal (nouveau site, modification, réparation)
+- Note les contraintes ou préférences mentionnées
+
+### ÉTAPE 2: ANALYSE CLIENT 👤
+- Niche précise: Pas "coach" mais "coach business pour entrepreneurs tech"
+- Client idéal: Âge, revenus, problèmes, aspirations
+- Concurrence: Qu'est-ce qui différencie ce business?
+- Objectif de conversion: RDV? Vente? Lead? Contact?
+
+### ÉTAPE 3: ARCHITECTURE 🏗️
+- Liste les sections à créer (minimum 7 pour un nouveau site)
+- Définis l'ordre logique du tunnel de conversion
+- Note les éléments obligatoires: navbar sticky, hero, CTA, footer
+
+### ÉTAPE 4: DESIGN SYSTEM 🎨
+- Choisis la palette EXACTE (codes couleurs)
+- Définis la typographie (font-family, weights)
+- Note le style d'ambiance (dark premium, light minimal, etc.)
+- Planifie les animations clés
+
+### ÉTAPE 5: AUTO-VÉRIFICATION ✅
+Avant de générer, vérifie CHAQUE point:
+□ Minimum 7 sections complètes
+□ Contenu RÉEL adapté à la niche (0 placeholder)
+□ Minimum 4 images Unsplash contextuelles
+□ Responsive: sm, md, lg, xl breakpoints
+□ Animations hover sur TOUS les boutons/cards
+□ CTA visible à plusieurs endroits
+□ Footer complet avec liens
+□ Navbar sticky avec backdrop-blur
+□ Palette cohérente adaptée à la niche
+`;
 
 const REPAIR_MODE_PROMPT = `${CREALI_PERSONA}
 
@@ -148,118 +296,35 @@ const CREATIVE_MODE_PROMPT = `${CREALI_PERSONA}
 
 Tu crées des landing pages EXCEPTIONNELLES de niveau Framer/Webflow/Lovable.
 
-## 🧠 PROCESSUS MENTAL (Dans <thinking>)
-AVANT de coder, analyse TOUJOURS:
-1. **Niche précise**: Pas "coach" mais "coach business pour entrepreneurs tech"
-2. **Client idéal**: Âge, revenus, problèmes, aspirations
-3. **Émotion à transmettre**: Confiance? Luxe? Énergie? Innovation?
-4. **Différenciateur**: Qu'est-ce qui rend ce business UNIQUE?
-5. **Palette choisie**: Couleurs spécifiques adaptées à la niche
-6. **Sections planifiées**: Liste des sections à créer
+${MULTI_STEP_REASONING}
 
 ## 🎨 DESIGN SYSTEM PREMIUM
 
-### Palettes par Industrie (OBLIGATOIRE - NE PAS utiliser les mêmes couleurs pour tout!)
+### Palettes par Industrie (CHOISIS selon la niche détectée!)
 - **Tech/SaaS**: bg-[#0a0a0f] text-white, accent violet #8b5cf6 ou bleu #3b82f6
-- **Luxe/Premium**: bg-[#0c0c0c] ou bg-[#faf9f6], accent or #c9a962, typo serif
-- **Bien-être/Spa**: bg-[#fefdfb], accent vert sauge #7c9a82 ou terracotta #c4a77d
-- **Fitness/Sport**: bg-[#0f0f0f], accent rouge #ef4444 ou orange #f97316, énergie forte
-- **Food/Restaurant**: bg-[#fffbf5], accent chaud #d97706 ou rouge #dc2626
-- **Corporate/B2B**: bg-white clean, accent bleu #2563eb, pro et sobre
-- **Créatif/Agence**: Noir/blanc contrasté avec 1 accent coloré unique
-- **E-commerce**: bg-white minimal, accent brand color, focus produit
-- **Immobilier**: bg-[#f8f7f4], accent doré #b8860b ou vert #166534, élégance
+- **Luxe**: bg-[#0c0c0c] ou bg-[#faf9f6], accent or #c9a962, serif fonts
+- **Bien-être**: bg-[#fefdfb], accent vert sauge #7c9a82 ou terracotta #c4a77d
+- **Fitness**: bg-[#0f0f0f], accent rouge #ef4444 ou orange #f97316
+- **Food**: bg-[#fffbf5], accent chaud #d97706 ou rouge #dc2626
+- **Corporate**: bg-white, accent bleu #2563eb
+- **Créatif/Agence**: Noir/blanc avec 1 accent coloré unique
+- **E-commerce**: bg-white clean, accent brand color
+- **Immobilier**: bg-[#f8f7f4], accent doré #b8860b ou vert #166534
 - **Mode/Beauté**: bg-[#faf8f5], accent rose #ec4899 ou nude #d4a574
-- **Coaching/Formation**: bg-gradient sombre, accent énergique, confiance
+- **Coaching**: bg-gradient sombre, accent amber #f59e0b
+- **Médical**: bg-white, accent cyan #0891b2 ou emerald #059669
 
-### Typographie
-\`\`\`html
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-\`\`\`
+### Typographie Excellence
 - **H1**: text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold tracking-tight leading-[1.1]
 - **H2**: text-3xl md:text-4xl lg:text-5xl font-bold
 - **Sous-titres**: text-lg md:text-xl text-gray-400 max-w-2xl
 - **Body**: text-base leading-relaxed
 
-### Spacing & Layout
+### Spacing Système
 - Sections: py-20 md:py-28 lg:py-32
 - Containers: max-w-7xl mx-auto px-4 sm:px-6 lg:px-8
 - Gaps: gap-4 md:gap-6 lg:gap-8
 - Cards: p-6 md:p-8 rounded-2xl md:rounded-3xl
-
-## 📐 COMPOSANTS PREMIUM (Utilise ces patterns!)
-
-### Hero avec effet glassmorphism et animations
-\`\`\`html
-<section class="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-black">
-  <div class="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.3),transparent)]"></div>
-  <div class="absolute inset-0 overflow-hidden">
-    <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse"></div>
-    <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-pulse" style="animation-delay: 1s;"></div>
-  </div>
-  
-  <div class="relative z-10 max-w-5xl mx-auto px-4 text-center">
-    <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 border border-white/20 text-sm text-gray-300 mb-8 backdrop-blur-sm">
-      <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-      <span>Badge accrocheur contextuel</span>
-    </div>
-    
-    <h1 class="text-4xl md:text-6xl lg:text-7xl font-bold text-white mb-6 tracking-tight">
-      Titre impactant avec 
-      <span class="bg-gradient-to-r from-purple-400 via-pink-500 to-orange-500 bg-clip-text text-transparent">mot clé gradient</span>
-    </h1>
-    
-    <p class="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-      Sous-titre qui explique la proposition de valeur unique en une phrase claire.
-    </p>
-    
-    <div class="flex flex-col sm:flex-row gap-4 justify-center">
-      <a href="#" class="group px-8 py-4 bg-white text-gray-900 rounded-full font-semibold hover:bg-gray-100 transition-all duration-300 hover:scale-105 flex items-center justify-center gap-2 shadow-lg shadow-white/25">
-        CTA Principal
-        <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
-      </a>
-      <a href="#" class="px-8 py-4 border border-white/20 text-white rounded-full font-semibold hover:bg-white/10 transition-all duration-300">
-        CTA Secondaire
-      </a>
-    </div>
-  </div>
-</section>
-\`\`\`
-
-### Feature Card avec Glass Effect
-\`\`\`html
-<div class="group relative p-8 rounded-3xl bg-white/5 backdrop-blur-xl border border-white/10 hover:border-white/20 transition-all duration-500 hover:shadow-2xl hover:-translate-y-2">
-  <div class="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-  <div class="relative z-10">
-    <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500 shadow-lg shadow-purple-500/25">
-      <!-- Icon SVG -->
-    </div>
-    <h3 class="text-xl font-bold text-white mb-3">Titre Feature</h3>
-    <p class="text-gray-400 leading-relaxed">Description spécifique à la niche.</p>
-  </div>
-</div>
-\`\`\`
-
-### Navbar Sticky avec scroll effect
-\`\`\`html
-<nav class="fixed top-0 left-0 right-0 z-50 transition-all duration-300" id="navbar">
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="flex items-center justify-between h-20">
-      <!-- Logo + Nav Links + CTA -->
-    </div>
-  </div>
-</nav>
-<script>
-window.addEventListener('scroll', () => {
-  const navbar = document.getElementById('navbar');
-  if (window.scrollY > 50) {
-    navbar.classList.add('bg-gray-900/80', 'backdrop-blur-xl', 'border-b', 'border-white/10');
-  } else {
-    navbar.classList.remove('bg-gray-900/80', 'backdrop-blur-xl', 'border-b', 'border-white/10');
-  }
-});
-</script>
-\`\`\`
 
 ## 🖼️ IMAGES UNSPLASH (Utilise ces URLs!)
 
@@ -268,6 +333,7 @@ window.addEventListener('scroll', () => {
 - https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop
 - https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=400&h=400&fit=crop
 - https://images.unsplash.com/photo-1560250097-0b93528c311a?w=400&h=400&fit=crop
+- https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop
 
 **Business:** https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200&h=800&fit=crop
 **Tech:** https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=1200&h=800&fit=crop
@@ -275,6 +341,7 @@ window.addEventListener('scroll', () => {
 **Food:** https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1200&h=800&fit=crop
 **Bien-être:** https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=1200&h=800&fit=crop
 **Immobilier:** https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1200&h=800&fit=crop
+**Coaching:** https://images.unsplash.com/photo-1552664730-d307ca884978?w=1200&h=800&fit=crop
 
 ## ✅ CHECKLIST QUALITÉ (OBLIGATOIRE avant de terminer)
 
@@ -300,7 +367,7 @@ window.addEventListener('scroll', () => {
 
 ## 📤 FORMAT DE SORTIE
 
-1. <thinking> avec analyse complète de la niche et tes choix
+1. <thinking> avec les 5 ÉTAPES complètes
 2. Code HTML COMPLET prêt pour production`;
 
 const VISION_PROMPT = `${CREALI_PERSONA}
@@ -471,8 +538,10 @@ serve(async (req) => {
       });
     }
 
-    // Detect mode and build prompt
+    // Detect mode, niche, and build prompt
     const mode = detectMode(message, !!currentHtml);
+    const detectedNiche = detectNiche(message);
+    const nicheEnhancement = getNicheEnhancement(detectedNiche);
     const useVision = hasImageData(imageData);
     const model = 'gpt-4.1-2025-04-14';
     
@@ -482,10 +551,10 @@ serve(async (req) => {
     } else if (mode === 'repair') {
       systemPromptToUse = REPAIR_MODE_PROMPT;
     } else {
-      systemPromptToUse = CREATIVE_MODE_PROMPT;
+      systemPromptToUse = CREATIVE_MODE_PROMPT + (nicheEnhancement ? `\n\n${nicheEnhancement}` : '');
     }
 
-    console.log('Mode detected:', mode, 'Vision:', useVision);
+    console.log('Mode detected:', mode, 'Niche:', detectedNiche, 'Vision:', useVision);
 
     // Build conversation context
     const conversationContext = conversationHistory?.map((msg: any) => ({
@@ -493,7 +562,7 @@ serve(async (req) => {
       content: msg.content
     })) || [];
 
-    // Build user content
+    // Build user content with explicit instructions
     let userContent: any;
     if (useVision) {
       userContent = [
@@ -501,15 +570,15 @@ serve(async (req) => {
           type: "text",
           text: currentHtml 
             ? `Site actuel:\n\`\`\`html\n${currentHtml.substring(0, 6000)}\n\`\`\`\n\nInstruction: ${message}\n\nAnalyse l'image et modifie le site selon les instructions.`
-            : `Instruction: ${message}\n\nAnalyse cette image et génère un site web PREMIUM qui s'en inspire.`
+            : `Instruction: ${message}\n\nAnalyse cette image et génère un site web PREMIUM qui s'en inspire. Utilise le processus en 5 étapes dans <thinking>.`
         },
         { type: "image_url", image_url: { url: imageData } }
       ];
     } else if (currentHtml) {
       const contextStr = conversationContext.slice(-8).map((m: any) => `${m.role}: ${m.content}`).join('\n');
-      userContent = `Contexte de conversation:\n${contextStr}\n\nSite actuel:\n\`\`\`html\n${currentHtml.substring(0, 10000)}\n\`\`\`\n\nNouvelle demande: ${message}\n\nD'abord réfléchis dans <thinking></thinking>, puis génère le HTML complet modifié.`;
+      userContent = `Contexte de conversation:\n${contextStr}\n\nSite actuel:\n\`\`\`html\n${currentHtml.substring(0, 10000)}\n\`\`\`\n\nNouvelle demande: ${message}\n\nD'abord réfléchis dans <thinking></thinking> avec les 5 ÉTAPES, puis génère le HTML complet modifié.`;
     } else {
-      userContent = `Crée un site web professionnel PREMIUM pour: ${message}\n\nD'abord réfléchis dans <thinking></thinking> en analysant la niche, puis génère le HTML complet avec navbar sticky, hero impactant, minimum 7 sections, et footer complet.`;
+      userContent = `Crée un site web professionnel PREMIUM pour: ${message}\n\nSuis OBLIGATOIREMENT le processus en 5 ÉTAPES dans <thinking>:\n1. COMPRÉHENSION - reformule la demande\n2. ANALYSE CLIENT - niche, cible, différenciateur\n3. ARCHITECTURE - liste des 7+ sections\n4. DESIGN SYSTEM - palette, typo, style\n5. AUTO-VÉRIFICATION - checklist qualité\n\nPuis génère le HTML complet avec navbar sticky, hero impactant, minimum 7 sections, et footer complet.`;
     }
 
     // STREAMING MODE
@@ -660,7 +729,7 @@ serve(async (req) => {
                   model: 'google/gemini-2.5-flash',
                   messages: [
                     { role: 'system', content: DESIGN_NOTE_PROMPT },
-                    { role: 'user', content: `Brief utilisateur: "${message}"\n\nRéflexion du designer:\n${thinkingContent.substring(0, 1500)}\n\nMode: ${mode}` }
+                    { role: 'user', content: `Brief utilisateur: "${message}"\n\nRéflexion du designer:\n${thinkingContent.substring(0, 1500)}\n\nMode: ${mode}\nNiche détectée: ${detectedNiche || 'non spécifique'}` }
                   ],
                 }),
               });
@@ -763,7 +832,7 @@ serve(async (req) => {
           model: 'google/gemini-2.5-flash',
           messages: [
             { role: 'system', content: DESIGN_NOTE_PROMPT },
-            { role: 'user', content: `Brief: "${message}"\nRéflexion: ${thinkingContent.substring(0, 1500)}\nMode: ${mode}` }
+            { role: 'user', content: `Brief: "${message}"\nRéflexion: ${thinkingContent.substring(0, 1500)}\nMode: ${mode}\nNiche: ${detectedNiche || 'non spécifique'}` }
           ],
         }),
       });
