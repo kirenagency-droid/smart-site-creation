@@ -19,6 +19,81 @@ interface DnsCheckResult {
   };
 }
 
+// Add domain to Vercel project
+async function addDomainToVercel(domain: string, projectName: string, vercelToken: string): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  console.log(`🔗 Adding domain ${domain} to Vercel project ${projectName}`);
+  
+  try {
+    // First, get the project to find its ID
+    const projectResponse = await fetch(`https://api.vercel.com/v9/projects/${projectName}`, {
+      headers: {
+        'Authorization': `Bearer ${vercelToken}`,
+      },
+    });
+    
+    if (!projectResponse.ok) {
+      const error = await projectResponse.json();
+      console.error('Failed to get Vercel project:', error);
+      return { success: false, error: `Project not found: ${error.error?.message || 'Unknown error'}` };
+    }
+    
+    const project = await projectResponse.json();
+    console.log(`Found Vercel project: ${project.id}`);
+    
+    // Add domain to the project
+    const domainResponse = await fetch(`https://api.vercel.com/v10/projects/${project.id}/domains`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${vercelToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: domain,
+      }),
+    });
+    
+    const domainData = await domainResponse.json();
+    
+    if (!domainResponse.ok) {
+      // Check if domain already exists (409 conflict)
+      if (domainResponse.status === 409) {
+        console.log(`Domain ${domain} already configured on Vercel`);
+        return { success: true };
+      }
+      console.error('Failed to add domain to Vercel:', domainData);
+      return { success: false, error: domainData.error?.message || 'Failed to add domain' };
+    }
+    
+    console.log(`✅ Domain ${domain} successfully added to Vercel project`);
+    
+    // Also add www subdomain
+    try {
+      await fetch(`https://api.vercel.com/v10/projects/${project.id}/domains`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${vercelToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: `www.${domain}`,
+          redirect: domain, // Redirect www to root
+        }),
+      });
+      console.log(`✅ www.${domain} redirect configured`);
+    } catch (e) {
+      console.log(`Note: www subdomain setup skipped (may already exist)`);
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Vercel API error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
 // Real DNS check using Google DNS API
 async function realDnsCheck(domain: string, verificationToken: string): Promise<DnsCheckResult> {
   const expectedA = '76.76.21.21';
@@ -32,7 +107,6 @@ async function realDnsCheck(domain: string, verificationToken: string): Promise<
   let txtRecord: string | null = null;
 
   try {
-    // Check A record for root domain
     const aResponse = await fetch(`https://dns.google/resolve?name=${domain}&type=A`);
     const aData = await aResponse.json();
     console.log(`A record response:`, aData);
@@ -42,7 +116,6 @@ async function realDnsCheck(domain: string, verificationToken: string): Promise<
   }
 
   try {
-    // Check CNAME for www subdomain
     const cnameResponse = await fetch(`https://dns.google/resolve?name=www.${domain}&type=CNAME`);
     const cnameData = await cnameResponse.json();
     console.log(`CNAME record response:`, cnameData);
@@ -53,7 +126,6 @@ async function realDnsCheck(domain: string, verificationToken: string): Promise<
   }
 
   try {
-    // Check TXT for verification
     const txtResponse = await fetch(`https://dns.google/resolve?name=_penflow-verify.${domain}&type=TXT`);
     const txtData = await txtResponse.json();
     console.log(`TXT record response:`, txtData);
@@ -66,7 +138,6 @@ async function realDnsCheck(domain: string, verificationToken: string): Promise<
   const cnameOk = cnameRecord === expectedCNAME || (cnameRecord?.includes('vercel') ?? false);
   const txtOk = txtRecord?.includes(verificationToken) ?? false;
 
-  // Domain is verified if A record is correct (CNAME and TXT are optional but helpful)
   const verified = aOk;
 
   console.log(`DNS Check Results for ${domain}:`);
@@ -132,17 +203,47 @@ serve(async (req) => {
       );
     }
 
+    // Get deployment and project info for Vercel
+    const { data: deployment } = await supabaseAdmin
+      .from('deployments')
+      .select('*, projects(name)')
+      .eq('id', deploymentId)
+      .single();
+
     // Perform real DNS check
     const dnsCheckResult = await realDnsCheck(customDomain.domain, customDomain.verification_token);
 
     // Update domain status based on check
     if (dnsCheckResult.verified) {
+      // Try to add domain to Vercel
+      const vercelToken = Deno.env.get('VERCEL_TOKEN');
+      let vercelConfigured = false;
+      let vercelError: string | null = null;
+
+      if (vercelToken && deployment) {
+        const projectName = deployment.subdomain 
+          ? `creali-${deployment.subdomain}` 
+          : `creali-${(deployment.projects as { name: string })?.name?.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'site'}`;
+        
+        const vercelResult = await addDomainToVercel(customDomain.domain, projectName, vercelToken);
+        vercelConfigured = vercelResult.success;
+        vercelError = vercelResult.error || null;
+        
+        await supabaseAdmin.from('deployment_logs').insert({
+          deployment_id: deploymentId,
+          level: vercelConfigured ? 'success' : 'warning',
+          message: vercelConfigured 
+            ? `Domain ${customDomain.domain} configured on Vercel` 
+            : `Vercel domain config: ${vercelError}`,
+        });
+      }
+
       await supabaseAdmin
         .from('custom_domains')
         .update({
           verification_status: 'verified',
           dns_configured: true,
-          ssl_provisioned: true
+          ssl_provisioned: vercelConfigured
         })
         .eq('id', customDomain.id);
 
@@ -152,15 +253,28 @@ serve(async (req) => {
         .update({
           status: 'deployed',
           deployment_url: `https://${customDomain.domain}`,
-          ssl_status: 'active'
+          ssl_status: vercelConfigured ? 'active' : 'pending'
         })
         .eq('id', deploymentId);
 
       await supabaseAdmin.from('deployment_logs').insert({
         deployment_id: deploymentId,
         level: 'success',
-        message: `Domain ${customDomain.domain} verified and SSL provisioned`,
+        message: `Domain ${customDomain.domain} verified${vercelConfigured ? ' and configured on Vercel' : ''}`,
       });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          verified: true,
+          vercelConfigured,
+          details: dnsCheckResult.details,
+          message: vercelConfigured 
+            ? '🎉 Domaine vérifié et configuré ! Votre site est en ligne.'
+            : 'Domaine vérifié ! Configuration Vercel en cours...'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     } else {
       await supabaseAdmin.from('deployment_logs').insert({
         deployment_id: deploymentId,
@@ -172,19 +286,17 @@ serve(async (req) => {
           txtRecord: dnsCheckResult.details.txtRecord.found
         }
       });
-    }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        verified: dnsCheckResult.verified,
-        details: dnsCheckResult.details,
-        message: dnsCheckResult.verified 
-          ? 'Domaine vérifié ! Votre site est en ligne.'
-          : 'DNS non configuré. Vérifiez vos enregistrements DNS.'
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+      return new Response(
+        JSON.stringify({
+          success: true,
+          verified: false,
+          details: dnsCheckResult.details,
+          message: 'DNS non configuré. Vérifiez vos enregistrements DNS.'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
   } catch (error: unknown) {
     console.error('Check DNS error:', error);
