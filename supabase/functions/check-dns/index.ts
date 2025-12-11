@@ -10,6 +10,81 @@ interface CheckDnsRequest {
   deploymentId: string;
 }
 
+interface DnsCheckResult {
+  verified: boolean;
+  details: {
+    aRecord: { found: boolean; value: string | null; expected: string };
+    cnameRecord: { found: boolean; value: string | null; expected: string };
+    txtRecord: { found: boolean; value: string | null; expected: string };
+  };
+}
+
+// Real DNS check using Google DNS API
+async function realDnsCheck(domain: string, verificationToken: string): Promise<DnsCheckResult> {
+  const expectedA = '76.76.21.21';
+  const expectedCNAME = 'cname.vercel-dns.com';
+  const expectedTXT = `penflow-verify=${verificationToken}`;
+
+  console.log(`🔍 Checking DNS for ${domain} with token ${verificationToken}`);
+
+  let aRecord: string | null = null;
+  let cnameRecord: string | null = null;
+  let txtRecord: string | null = null;
+
+  try {
+    // Check A record for root domain
+    const aResponse = await fetch(`https://dns.google/resolve?name=${domain}&type=A`);
+    const aData = await aResponse.json();
+    console.log(`A record response:`, aData);
+    aRecord = aData.Answer?.find((r: { type: number; data: string }) => r.type === 1)?.data || null;
+  } catch (e) {
+    console.error('A record check failed:', e);
+  }
+
+  try {
+    // Check CNAME for www subdomain
+    const cnameResponse = await fetch(`https://dns.google/resolve?name=www.${domain}&type=CNAME`);
+    const cnameData = await cnameResponse.json();
+    console.log(`CNAME record response:`, cnameData);
+    const rawCname = cnameData.Answer?.find((r: { type: number; data: string }) => r.type === 5)?.data || null;
+    cnameRecord = rawCname?.replace(/\.$/, '') || null;
+  } catch (e) {
+    console.error('CNAME record check failed:', e);
+  }
+
+  try {
+    // Check TXT for verification
+    const txtResponse = await fetch(`https://dns.google/resolve?name=_penflow-verify.${domain}&type=TXT`);
+    const txtData = await txtResponse.json();
+    console.log(`TXT record response:`, txtData);
+    txtRecord = txtData.Answer?.find((r: { type: number; data: string }) => r.type === 16)?.data?.replace(/"/g, '') || null;
+  } catch (e) {
+    console.error('TXT record check failed:', e);
+  }
+
+  const aOk = aRecord === expectedA;
+  const cnameOk = cnameRecord === expectedCNAME || (cnameRecord?.includes('vercel') ?? false);
+  const txtOk = txtRecord?.includes(verificationToken) ?? false;
+
+  // Domain is verified if A record is correct (CNAME and TXT are optional but helpful)
+  const verified = aOk;
+
+  console.log(`DNS Check Results for ${domain}:`);
+  console.log(`  A: ${aRecord} (expected: ${expectedA}) - ${aOk ? '✅' : '❌'}`);
+  console.log(`  CNAME: ${cnameRecord} (expected: ${expectedCNAME}) - ${cnameOk ? '✅' : '❌'}`);
+  console.log(`  TXT: ${txtRecord} (expected: ${expectedTXT}) - ${txtOk ? '✅' : '❌'}`);
+  console.log(`  Verified: ${verified}`);
+
+  return {
+    verified,
+    details: {
+      aRecord: { found: aOk, value: aRecord, expected: expectedA },
+      cnameRecord: { found: cnameOk, value: cnameRecord, expected: expectedCNAME },
+      txtRecord: { found: txtOk, value: txtRecord, expected: expectedTXT }
+    }
+  };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -57,9 +132,8 @@ serve(async (req) => {
       );
     }
 
-    // In production, you would actually check DNS records here
-    // For now, we'll simulate the check
-    const dnsCheckResult = await simulateDnsCheck(customDomain.domain, customDomain.verification_token);
+    // Perform real DNS check
+    const dnsCheckResult = await realDnsCheck(customDomain.domain, customDomain.verification_token);
 
     // Update domain status based on check
     if (dnsCheckResult.verified) {
@@ -92,7 +166,11 @@ serve(async (req) => {
         deployment_id: deploymentId,
         level: 'warning',
         message: `DNS verification pending for ${customDomain.domain}`,
-        metadata: dnsCheckResult.details
+        metadata: {
+          aRecord: dnsCheckResult.details.aRecord.found,
+          cnameRecord: dnsCheckResult.details.cnameRecord.found,
+          txtRecord: dnsCheckResult.details.txtRecord.found
+        }
       });
     }
 
@@ -117,29 +195,3 @@ serve(async (req) => {
     );
   }
 });
-
-async function simulateDnsCheck(domain: string, verificationToken: string): Promise<{
-  verified: boolean;
-  details: {
-    aRecord: boolean;
-    cnameRecord: boolean;
-    txtRecord: boolean;
-  }
-}> {
-  // In production, this would use DNS lookup APIs
-  // For development, we simulate the check
-  // You can use services like Cloudflare DNS API or Google DNS API
-  
-  console.log(`Simulating DNS check for ${domain} with token ${verificationToken}`);
-  
-  // Simulate: always return pending for now
-  // In production, implement actual DNS lookups
-  return {
-    verified: false,
-    details: {
-      aRecord: false,
-      cnameRecord: false,
-      txtRecord: false
-    }
-  };
-}
