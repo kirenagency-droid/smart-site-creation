@@ -95,10 +95,11 @@ async function forceSSLProvisioning(
   projectId: string,
   vercelToken: string
 ): Promise<boolean> {
-  console.log(`🔄 Forcing SSL re-provisioning for ${domain}`);
+  console.log(`🔄 Forcing SSL re-provisioning for ${domain} on project ${projectId}`);
   
   try {
-    // Remove domain
+    // Step 1: Remove domain
+    console.log(`🗑️ Step 1: Removing domain ${domain}...`);
     const removeResponse = await fetch(
       `https://api.vercel.com/v10/projects/${projectId}/domains/${domain}`,
       {
@@ -107,53 +108,90 @@ async function forceSSLProvisioning(
       }
     );
     
-    if (removeResponse.ok || removeResponse.status === 404) {
-      console.log(`✅ Domain removed, re-adding...`);
-      
-      // Wait a moment
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Re-add root domain
-      const addResponse = await fetch(
-        `https://api.vercel.com/v10/projects/${projectId}/domains`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${vercelToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ name: domain }),
-        }
-      );
-      
-      if (addResponse.ok || addResponse.status === 409) {
-        console.log(`✅ Root domain re-added`);
-        
-        // Also add www subdomain with redirect to root
-        const wwwResponse = await fetch(
-          `https://api.vercel.com/v10/projects/${projectId}/domains`,
-          {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${vercelToken}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ name: `www.${domain}`, redirect: domain }),
-          }
-        );
-        
-        if (wwwResponse.ok || wwwResponse.status === 409) {
-          console.log(`✅ www.${domain} added with redirect`);
-        }
-        
-        console.log(`✅ SSL should re-provision`);
-        return true;
-      }
+    console.log(`🗑️ DELETE response status: ${removeResponse.status}`);
+    
+    if (!removeResponse.ok && removeResponse.status !== 404) {
+      const errorBody = await removeResponse.text();
+      console.error(`❌ DELETE failed: ${removeResponse.status} - ${errorBody}`);
+      // Continue anyway - domain might not exist or be in weird state
+    } else {
+      console.log(`✅ Domain removed (or didn't exist)`);
     }
     
-    return false;
+    // Step 2: Wait longer for Vercel to process
+    console.log(`⏳ Waiting 5 seconds for Vercel to process...`);
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    // Step 3: Re-add root domain (ALWAYS try, even if DELETE failed)
+    console.log(`➕ Step 2: Re-adding root domain ${domain}...`);
+    const addResponse = await fetch(
+      `https://api.vercel.com/v10/projects/${projectId}/domains`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${vercelToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: domain }),
+      }
+    );
+    
+    console.log(`➕ POST root domain response status: ${addResponse.status}`);
+    
+    if (!addResponse.ok && addResponse.status !== 409) {
+      const errorBody = await addResponse.text();
+      console.error(`❌ POST root domain failed: ${addResponse.status} - ${errorBody}`);
+    } else {
+      console.log(`✅ Root domain added/exists (status ${addResponse.status})`);
+    }
+    
+    // Step 4: Add www subdomain with redirect
+    console.log(`➕ Step 3: Adding www.${domain} with redirect...`);
+    const wwwResponse = await fetch(
+      `https://api.vercel.com/v10/projects/${projectId}/domains`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${vercelToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: `www.${domain}`, redirect: domain }),
+      }
+    );
+    
+    console.log(`➕ POST www domain response status: ${wwwResponse.status}`);
+    
+    if (!wwwResponse.ok && wwwResponse.status !== 409) {
+      const errorBody = await wwwResponse.text();
+      console.error(`❌ POST www domain failed: ${wwwResponse.status} - ${errorBody}`);
+    } else {
+      console.log(`✅ www.${domain} added/exists with redirect`);
+    }
+    
+    // Step 5: Verify domain was added and check SSL state
+    console.log(`🔍 Step 4: Verifying domain configuration...`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    const verifyResponse = await fetch(
+      `https://api.vercel.com/v9/projects/${projectId}/domains/${domain}`,
+      { headers: { 'Authorization': `Bearer ${vercelToken}` } }
+    );
+    
+    if (verifyResponse.ok) {
+      const verifyData = await verifyResponse.json();
+      console.log(`📋 Final domain state:`, JSON.stringify({
+        verified: verifyData.verified,
+        sslCert: verifyData.sslCert,
+      }));
+      console.log(`✅ SSL provisioning triggered successfully`);
+      return true;
+    } else {
+      console.error(`❌ Could not verify domain after re-adding`);
+      return false;
+    }
+    
   } catch (error) {
-    console.error('Force SSL error:', error);
+    console.error('❌ Force SSL error:', error);
     return false;
   }
 }
