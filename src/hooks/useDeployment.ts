@@ -58,6 +58,21 @@ export const useDeployment = (projectId: string | null): UseDeploymentReturn => 
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
 
+  // Helper to refresh session before API calls
+  const ensureValidSession = async () => {
+    const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+    if (error || !currentSession) {
+      // Try to refresh
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshData.session) {
+        toast.error('Session expirée. Veuillez vous reconnecter.');
+        window.location.href = '/auth';
+        return false;
+      }
+    }
+    return true;
+  };
+
   const fetchDeployment = useCallback(async () => {
     if (!projectId || !user) {
       setDeployment(null);
@@ -68,6 +83,7 @@ export const useDeployment = (projectId: string | null): UseDeploymentReturn => 
     }
 
     try {
+      await ensureValidSession();
       // Fetch deployment
       const { data: deploymentData, error: deploymentError } = await supabase
         .from('deployments')
@@ -148,6 +164,10 @@ export const useDeployment = (projectId: string | null): UseDeploymentReturn => 
 
     setPublishing(true);
     try {
+      // Ensure valid session before API call
+      const isValid = await ensureValidSession();
+      if (!isValid) return;
+
       const { data, error } = await supabase.functions.invoke('publish-site', {
         body: {
           projectId,
@@ -176,6 +196,9 @@ export const useDeployment = (projectId: string | null): UseDeploymentReturn => 
 
     setPublishing(true);
     try {
+      const isValid = await ensureValidSession();
+      if (!isValid) return;
+
       const { data, error } = await supabase.functions.invoke('publish-site', {
         body: {
           projectId,
@@ -209,6 +232,9 @@ export const useDeployment = (projectId: string | null): UseDeploymentReturn => 
     if (!deployment || !session) return null;
 
     try {
+      const isValid = await ensureValidSession();
+      if (!isValid) return null;
+
       const { data, error } = await supabase.functions.invoke('verify-domain', {
         body: {
           deploymentId: deployment.id,
@@ -240,6 +266,9 @@ export const useDeployment = (projectId: string | null): UseDeploymentReturn => 
     if (!deployment || !session) return false;
 
     try {
+      const isValid = await ensureValidSession();
+      if (!isValid) return false;
+
       const { data, error } = await supabase.functions.invoke('check-dns', {
         body: { deploymentId: deployment.id }
       });
