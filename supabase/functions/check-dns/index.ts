@@ -221,11 +221,13 @@ serve(async (req) => {
       let vercelError: string | null = null;
 
       if (vercelToken && deployment) {
-        const projectName = deployment.subdomain 
-          ? `creali-${deployment.subdomain}` 
-          : `creali-${(deployment.projects as { name: string })?.name?.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'site'}`;
+        // Use stored vercel_project_name or derive from project_id
+        const vercelProjectName = deployment.vercel_project_name 
+          || `creali-${deployment.project_id.substring(0, 8)}`;
         
-        const vercelResult = await addDomainToVercel(customDomain.domain, projectName, vercelToken);
+        console.log(`Using Vercel project: ${vercelProjectName} for domain ${customDomain.domain}`);
+        
+        const vercelResult = await addDomainToVercel(customDomain.domain, vercelProjectName, vercelToken);
         vercelConfigured = vercelResult.success;
         vercelError = vercelResult.error || null;
         
