@@ -97,22 +97,30 @@ export const HostingPanel = ({ projectId }: HostingPanelProps) => {
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {/* Current URL */}
-          {deployment?.deploymentUrl && (
+          {/* Current URL - Show custom domain if active, otherwise subdomain */}
+          {(deployment?.deploymentUrl || customDomain?.domain) && (
             <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
               <p className="text-sm text-muted-foreground mb-2">URL actuelle</p>
               <div className="flex items-center gap-2">
                 <a 
-                  href={deployment.deploymentUrl} 
+                  href={customDomain?.domain && customDomain?.sslProvisioned 
+                    ? `https://${customDomain.domain}` 
+                    : customDomain?.domain 
+                      ? `https://${customDomain.domain}`
+                      : deployment?.deploymentUrl || ''
+                  } 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-primary hover:underline flex items-center gap-1 font-medium"
                 >
-                  {deployment.deploymentUrl}
+                  {customDomain?.domain 
+                    ? `https://${customDomain.domain}` 
+                    : deployment?.deploymentUrl
+                  }
                   <ExternalLink className="w-4 h-4" />
                 </a>
               </div>
-              {deployment.lastDeployedAt && (
+              {deployment?.lastDeployedAt && (
                 <p className="text-xs text-muted-foreground mt-2">
                   Dernière publication: {deployment.lastDeployedAt.toLocaleString('fr-FR')}
                 </p>
