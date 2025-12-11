@@ -333,7 +333,7 @@ export const DomainSetup = ({ projectId, onClose }: DomainSetupProps) => {
                   {preCheckResult.currentARecord && (
                     <p className="text-muted-foreground">
                       A record actuel: <code className="bg-muted px-1 rounded">{preCheckResult.currentARecord}</code>
-                      {preCheckResult.currentARecord === '76.76.21.21' ? ' ✅' : ' (à modifier)'}
+                      {preCheckResult.currentARecord?.startsWith('76.76.') || preCheckResult.currentARecord?.startsWith('216.198.') ? ' ✅ (Vercel)' : ' (à modifier)'}
                     </p>
                   )}
                 </div>

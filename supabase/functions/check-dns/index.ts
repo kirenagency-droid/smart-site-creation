@@ -15,132 +15,20 @@ interface DnsCheckResult {
   details: {
     aRecord: { found: boolean; value: string | null; expected: string };
     cnameRecord: { found: boolean; value: string | null; expected: string };
-    txtRecord: { found: boolean; value: string | null; expected: string };
   };
 }
 
-// Remove domain from old Vercel projects before adding to new one
-// IMPORTANT: Must remove redirects (www) BEFORE removing the main domain
-async function removeDomainFromOldProjects(
+// Get Vercel domain configuration and verification status
+async function getVercelDomainStatus(
   domain: string, 
-  targetProjectName: string, 
+  projectId: string, 
   vercelToken: string
-): Promise<{ removed: boolean; oldProject?: string; error?: string }> {
-  console.log(`🔍 Searching for domain ${domain} on existing Vercel projects...`);
-  
-  // Domains to check and remove (www first, then root)
-  const domainsToRemove = [`www.${domain}`, domain];
-  
-  try {
-    // List all projects
-    const projectsResponse = await fetch('https://api.vercel.com/v9/projects?limit=100', {
-      headers: {
-        'Authorization': `Bearer ${vercelToken}`,
-      },
-    });
-    
-    if (!projectsResponse.ok) {
-      console.error('Failed to list Vercel projects');
-      return { removed: false, error: 'Failed to list projects' };
-    }
-    
-    const projectsData = await projectsResponse.json();
-    const projects = projectsData.projects || [];
-    
-    console.log(`Found ${projects.length} Vercel projects`);
-    
-    // Filter to creali- projects only (excluding target)
-    const crealiProjects = projects.filter((p: { name: string }) => 
-      p.name.startsWith('creali-') && p.name !== targetProjectName
-    );
-    
-    console.log(`Checking ${crealiProjects.length} creali- projects (excluding target ${targetProjectName})`);
-    
-    let removedFrom: string | undefined;
-    
-    for (const project of crealiProjects) {
-      // Check if any of our domains exist on this project
-      const domainsResponse = await fetch(`https://api.vercel.com/v10/projects/${project.id}/domains`, {
-        headers: {
-          'Authorization': `Bearer ${vercelToken}`,
-        },
-      });
-      
-      if (!domainsResponse.ok) {
-        console.log(`Could not check domains for project ${project.name}`);
-        continue;
-      }
-      
-      const domainsData = await domainsResponse.json();
-      const projectDomains = domainsData.domains || [];
-      
-      // Check if our domain or www variant is on this project
-      const hasOurDomain = projectDomains.some((d: { name: string }) => 
-        domainsToRemove.includes(d.name)
-      );
-      
-      if (hasOurDomain) {
-        console.log(`⚠️ Found domain on old project ${project.name} - removing in cascade order...`);
-        
-        // CRITICAL: Remove in order - www FIRST (redirect), then root domain
-        for (const domToRemove of domainsToRemove) {
-          const existsOnProject = projectDomains.some((d: { name: string }) => d.name === domToRemove);
-          
-          if (!existsOnProject) {
-            console.log(`  ${domToRemove} not found on project, skipping`);
-            continue;
-          }
-          
-          console.log(`  Removing ${domToRemove} from ${project.name}...`);
-          
-          const deleteResponse = await fetch(
-            `https://api.vercel.com/v9/projects/${project.id}/domains/${domToRemove}`,
-            {
-              method: 'DELETE',
-              headers: {
-                'Authorization': `Bearer ${vercelToken}`,
-              },
-            }
-          );
-          
-          if (deleteResponse.ok || deleteResponse.status === 404) {
-            console.log(`  ✅ Removed ${domToRemove} from project ${project.name}`);
-          } else {
-            const errorData = await deleteResponse.json();
-            console.error(`  ❌ Failed to remove ${domToRemove}:`, errorData);
-            
-            // If it's a redirect error, we need to handle it
-            if (errorData.error?.code === 'domain_is_redirect') {
-              console.log(`  ${domToRemove} is a redirect target, continuing...`);
-            } else {
-              return { removed: false, error: `Failed to remove ${domToRemove}: ${errorData.error?.message}` };
-            }
-          }
-        }
-        
-        removedFrom = project.name;
-        console.log(`✅ Cascade removal complete from ${project.name}`);
-      }
-    }
-    
-    if (removedFrom) {
-      return { removed: true, oldProject: removedFrom };
-    }
-    
-    console.log(`✅ Domain ${domain} not found on any other creali- projects`);
-    return { removed: false };
-    
-  } catch (error) {
-    console.error('Error searching for domain on old projects:', error);
-    return { removed: false, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}
-
-// Check Vercel domain status for SSL/verification
-async function checkVercelDomainStatus(domain: string, projectId: string, vercelToken: string): Promise<{
+): Promise<{
   verified: boolean;
   sslReady: boolean;
+  misconfigured: boolean;
   verification?: { type: string; domain: string; value: string }[];
+  configuredValue?: string;
   error?: string;
 }> {
   console.log(`🔍 Checking Vercel domain status for ${domain} on project ${projectId}`);
@@ -148,30 +36,26 @@ async function checkVercelDomainStatus(domain: string, projectId: string, vercel
   try {
     const response = await fetch(
       `https://api.vercel.com/v9/projects/${projectId}/domains/${domain}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${vercelToken}`,
-        },
-      }
+      { headers: { 'Authorization': `Bearer ${vercelToken}` } }
     );
     
     if (!response.ok) {
       const errorData = await response.json();
       console.error('Failed to get domain status:', errorData);
-      return { verified: false, sslReady: false, error: errorData.error?.message || 'Failed to check domain' };
+      return { verified: false, sslReady: false, misconfigured: true, error: errorData.error?.message };
     }
     
     const data = await response.json();
-    console.log(`Vercel domain status for ${domain}:`, JSON.stringify(data, null, 2));
+    console.log(`Vercel domain config for ${domain}:`, JSON.stringify(data, null, 2));
     
-    // Check verification status
     const isVerified = data.verified === true;
-    const sslReady = isVerified; // SSL is auto-provisioned once verified
+    const sslReady = isVerified;
+    const isMisconfigured = data.misconfigured === true;
     
-    // If not verified, extract verification requirements
+    // Extract verification requirements if not verified
     let verificationRequirements: { type: string; domain: string; value: string }[] | undefined;
     
-    if (!isVerified && data.verification) {
+    if (!isVerified && data.verification?.length > 0) {
       verificationRequirements = data.verification.map((v: { type: string; domain: string; value: string }) => ({
         type: v.type,
         domain: v.domain,
@@ -183,236 +67,121 @@ async function checkVercelDomainStatus(domain: string, projectId: string, vercel
     return {
       verified: isVerified,
       sslReady,
+      misconfigured: isMisconfigured,
       verification: verificationRequirements,
+      configuredValue: data.configuredBy || undefined,
     };
   } catch (error) {
-    console.error('Error checking Vercel domain status:', error);
-    return { verified: false, sslReady: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    console.error('Error checking Vercel domain:', error);
+    return { verified: false, sslReady: false, misconfigured: true, error: error instanceof Error ? error.message : 'Unknown' };
   }
 }
 
-// Add domain to Vercel project
-async function addDomainToVercel(domain: string, projectName: string, vercelToken: string): Promise<{
-  success: boolean;
-  projectId?: string;
-  error?: string;
-}> {
-  console.log(`🔗 Adding domain ${domain} to Vercel project ${projectName}`);
+// Add domain to Vercel if not already added
+async function ensureDomainOnVercel(
+  domain: string, 
+  projectName: string, 
+  vercelToken: string
+): Promise<{ success: boolean; projectId?: string; error?: string }> {
+  console.log(`🔗 Ensuring domain ${domain} is on Vercel project ${projectName}`);
   
   try {
-    // STEP 1: Remove domain from any old projects first
-    const removeResult = await removeDomainFromOldProjects(domain, projectName, vercelToken);
-    if (removeResult.removed) {
-      console.log(`📝 Domain was removed from old project: ${removeResult.oldProject}`);
-    }
-    
-    // STEP 2: Get the target project
+    // Get project
     const projectResponse = await fetch(`https://api.vercel.com/v9/projects/${projectName}`, {
-      headers: {
-        'Authorization': `Bearer ${vercelToken}`,
-      },
+      headers: { 'Authorization': `Bearer ${vercelToken}` },
     });
     
     if (!projectResponse.ok) {
-      const error = await projectResponse.json();
-      console.error('Failed to get Vercel project:', error);
-      return { success: false, error: `Project not found: ${error.error?.message || 'Unknown error'}` };
+      return { success: false, error: 'Project not found' };
     }
     
     const project = await projectResponse.json();
     console.log(`Found Vercel project: ${project.id}`);
     
-    // STEP 3: Add domain to the project
-    const domainResponse = await fetch(`https://api.vercel.com/v10/projects/${project.id}/domains`, {
+    // Check if domain exists on project
+    const domainsResponse = await fetch(`https://api.vercel.com/v10/projects/${project.id}/domains`, {
+      headers: { 'Authorization': `Bearer ${vercelToken}` },
+    });
+    
+    if (domainsResponse.ok) {
+      const domainsData = await domainsResponse.json();
+      const existingDomain = domainsData.domains?.find((d: { name: string }) => d.name === domain);
+      
+      if (existingDomain) {
+        console.log(`✅ Domain ${domain} already on project`);
+        return { success: true, projectId: project.id };
+      }
+    }
+    
+    // Try to add domain
+    const addResponse = await fetch(`https://api.vercel.com/v10/projects/${project.id}/domains`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${vercelToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        name: domain,
-      }),
+      body: JSON.stringify({ name: domain }),
     });
     
-    const domainData = await domainResponse.json();
-    
-    if (!domainResponse.ok) {
-      // Handle 409 conflict - domain already exists somewhere
-      if (domainResponse.status === 409) {
-        console.log(`Domain ${domain} conflict - checking if it's on the correct project...`);
-        
-        // Check if domain is already on THIS project
-        const checkDomainsResponse = await fetch(`https://api.vercel.com/v10/projects/${project.id}/domains`, {
-          headers: {
-            'Authorization': `Bearer ${vercelToken}`,
-          },
-        });
-        
-        if (checkDomainsResponse.ok) {
-          const checkDomainsData = await checkDomainsResponse.json();
-          const existingDomain = checkDomainsData.domains?.find((d: { name: string }) => d.name === domain);
-          
-          if (existingDomain) {
-            console.log(`✅ Domain ${domain} is already on the correct project ${projectName}`);
-            return { success: true, projectId: project.id };
-          }
-        }
-        
-        // Domain is on another project - try to remove and retry
-        console.log(`Domain ${domain} is on a different project - attempting force removal...`);
-        
-        // Force search and remove from ALL projects (not just creali-)
-        const allProjectsResponse = await fetch('https://api.vercel.com/v9/projects?limit=100', {
-          headers: {
-            'Authorization': `Bearer ${vercelToken}`,
-          },
-        });
-        
-        if (allProjectsResponse.ok) {
-          const allProjectsData = await allProjectsResponse.json();
-          for (const otherProject of allProjectsData.projects || []) {
-            if (otherProject.id === project.id) continue;
-            
-            // Try to remove from this project
-            const deleteRes = await fetch(
-              `https://api.vercel.com/v9/projects/${otherProject.id}/domains/${domain}`,
-              {
-                method: 'DELETE',
-                headers: {
-                  'Authorization': `Bearer ${vercelToken}`,
-                },
-              }
-            );
-            
-            if (deleteRes.ok) {
-              console.log(`✅ Removed domain from project ${otherProject.name}`);
-              
-              // Retry adding to our project
-              const retryResponse = await fetch(`https://api.vercel.com/v10/projects/${project.id}/domains`, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${vercelToken}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ name: domain }),
-              });
-              
-              if (retryResponse.ok) {
-                console.log(`✅ Domain ${domain} successfully added after removal from old project`);
-                break;
-              }
-            }
-          }
-        }
-        
-        // Final check if domain is now on correct project
-        const finalCheckResponse = await fetch(`https://api.vercel.com/v10/projects/${project.id}/domains`, {
-          headers: {
-            'Authorization': `Bearer ${vercelToken}`,
-          },
-        });
-        
-        if (finalCheckResponse.ok) {
-          const finalData = await finalCheckResponse.json();
-          if (finalData.domains?.some((d: { name: string }) => d.name === domain)) {
-            console.log(`✅ Domain ${domain} confirmed on correct project`);
-            return { success: true, projectId: project.id };
-          }
-        }
-        
-        return { success: false, error: 'Domain conflict - could not reassign to correct project' };
-      }
-      
-      console.error('Failed to add domain to Vercel:', domainData);
-      return { success: false, error: domainData.error?.message || 'Failed to add domain' };
+    if (addResponse.ok || addResponse.status === 409) {
+      console.log(`✅ Domain ${domain} configured on project`);
+      return { success: true, projectId: project.id };
     }
     
-    console.log(`✅ Domain ${domain} successfully added to Vercel project`);
-    
-    // STEP 4: Also add www subdomain
-    try {
-      await fetch(`https://api.vercel.com/v10/projects/${project.id}/domains`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${vercelToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: `www.${domain}`,
-          redirect: domain, // Redirect www to root
-        }),
-      });
-      console.log(`✅ www.${domain} redirect configured`);
-    } catch (e) {
-      console.log(`Note: www subdomain setup skipped (may already exist)`);
-    }
-    
-    return { success: true, projectId: project.id };
+    const errorData = await addResponse.json();
+    return { success: false, error: errorData.error?.message };
   } catch (error) {
     console.error('Vercel API error:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown' };
   }
 }
 
-// Real DNS check using Google DNS API
-async function realDnsCheck(domain: string, verificationToken: string): Promise<DnsCheckResult> {
-  const expectedA = '76.76.21.21';
-  const expectedCNAME = 'cname.vercel-dns.com';
-  const expectedTXT = `penflow-verify=${verificationToken}`;
-
-  console.log(`🔍 Checking DNS for ${domain} with token ${verificationToken}`);
-
+// Real DNS check using Google DNS API - checks actual propagation
+async function checkDnsPropagation(domain: string): Promise<{
+  aRecord: { found: boolean; value: string | null };
+  cnameRecord: { found: boolean; value: string | null };
+}> {
+  console.log(`🔍 Checking DNS propagation for ${domain}`);
+  
   let aRecord: string | null = null;
   let cnameRecord: string | null = null;
-  let txtRecord: string | null = null;
-
+  
+  // Check A record
   try {
     const aResponse = await fetch(`https://dns.google/resolve?name=${domain}&type=A`);
     const aData = await aResponse.json();
-    console.log(`A record response:`, aData);
+    console.log(`A record response:`, JSON.stringify(aData));
     aRecord = aData.Answer?.find((r: { type: number; data: string }) => r.type === 1)?.data || null;
   } catch (e) {
     console.error('A record check failed:', e);
   }
-
+  
+  // Check CNAME for www
   try {
     const cnameResponse = await fetch(`https://dns.google/resolve?name=www.${domain}&type=CNAME`);
     const cnameData = await cnameResponse.json();
-    console.log(`CNAME record response:`, cnameData);
+    console.log(`CNAME record response:`, JSON.stringify(cnameData));
     const rawCname = cnameData.Answer?.find((r: { type: number; data: string }) => r.type === 5)?.data || null;
     cnameRecord = rawCname?.replace(/\.$/, '') || null;
   } catch (e) {
     console.error('CNAME record check failed:', e);
   }
-
-  try {
-    const txtResponse = await fetch(`https://dns.google/resolve?name=_penflow-verify.${domain}&type=TXT`);
-    const txtData = await txtResponse.json();
-    console.log(`TXT record response:`, txtData);
-    txtRecord = txtData.Answer?.find((r: { type: number; data: string }) => r.type === 16)?.data?.replace(/"/g, '') || null;
-  } catch (e) {
-    console.error('TXT record check failed:', e);
-  }
-
-  const aOk = aRecord === expectedA;
-  const cnameOk = cnameRecord === expectedCNAME || (cnameRecord?.includes('vercel') ?? false);
-  const txtOk = txtRecord?.includes(verificationToken) ?? false;
-
-  const verified = aOk;
-
-  console.log(`DNS Check Results for ${domain}:`);
-  console.log(`  A: ${aRecord} (expected: ${expectedA}) - ${aOk ? '✅' : '❌'}`);
-  console.log(`  CNAME: ${cnameRecord} (expected: ${expectedCNAME}) - ${cnameOk ? '✅' : '❌'}`);
-  console.log(`  TXT: ${txtRecord} (expected: ${expectedTXT}) - ${txtOk ? '✅' : '❌'}`);
-  console.log(`  Verified: ${verified}`);
-
+  
+  // Vercel accepts various A record IPs - check if it's a Vercel IP
+  const isVercelARecord = aRecord && (
+    aRecord === '76.76.21.21' || 
+    aRecord.startsWith('76.76.') || 
+    aRecord.startsWith('216.198.')
+  );
+  
+  // Vercel accepts various CNAME values
+  const isVercelCname = cnameRecord && cnameRecord.includes('vercel');
+  
+  console.log(`DNS Results - A: ${aRecord} (Vercel: ${isVercelARecord}), CNAME: ${cnameRecord} (Vercel: ${isVercelCname})`);
+  
   return {
-    verified,
-    details: {
-      aRecord: { found: aOk, value: aRecord, expected: expectedA },
-      cnameRecord: { found: cnameOk, value: cnameRecord, expected: expectedCNAME },
-      txtRecord: { found: txtOk, value: txtRecord, expected: expectedTXT }
-    }
+    aRecord: { found: !!isVercelARecord, value: aRecord },
+    cnameRecord: { found: !!isVercelCname, value: cnameRecord },
   };
 }
 
@@ -424,6 +193,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const vercelToken = Deno.env.get('VERCEL_TOKEN');
     
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -463,137 +233,114 @@ serve(async (req) => {
       );
     }
 
-    // Get deployment and project info for Vercel
+    // Get deployment info
     const { data: deployment } = await supabaseAdmin
       .from('deployments')
       .select('*, projects(name)')
       .eq('id', deploymentId)
       .single();
 
-    // Perform real DNS check
-    const dnsCheckResult = await realDnsCheck(customDomain.domain, customDomain.verification_token);
+    const domain = customDomain.domain;
+    
+    // Check DNS propagation
+    const dnsStatus = await checkDnsPropagation(domain);
+    
+    // Prepare response data
+    let verified = false;
+    let sslReady = false;
+    let vercelVerification: { type: string; domain: string; value: string }[] | undefined;
+    let message = 'DNS non configuré. Configurez les enregistrements et réessayez.';
 
-    // Update domain status based on check
-    if (dnsCheckResult.verified) {
-      // Try to add domain to Vercel
-      const vercelToken = Deno.env.get('VERCEL_TOKEN');
-      let vercelConfigured = false;
-      let vercelError: string | null = null;
-      let sslReady = false;
-      let vercelVerification: { type: string; domain: string; value: string }[] | undefined;
-
-      if (vercelToken && deployment) {
-        // Use stored vercel_project_name or derive from project_id
-        const vercelProjectName = deployment.vercel_project_name 
-          || `creali-${deployment.project_id.substring(0, 8)}`;
+    // If DNS looks configured, check with Vercel
+    if (vercelToken && deployment) {
+      const vercelProjectName = deployment.vercel_project_name 
+        || `creali-${deployment.project_id.substring(0, 8)}`;
+      
+      // Ensure domain is on Vercel
+      const ensureResult = await ensureDomainOnVercel(domain, vercelProjectName, vercelToken);
+      
+      if (ensureResult.success && ensureResult.projectId) {
+        // Check Vercel's verification status
+        const vercelStatus = await getVercelDomainStatus(domain, ensureResult.projectId, vercelToken);
         
-        console.log(`Using Vercel project: ${vercelProjectName} for domain ${customDomain.domain}`);
+        verified = vercelStatus.verified;
+        sslReady = vercelStatus.sslReady;
+        vercelVerification = vercelStatus.verification;
         
-        const vercelResult = await addDomainToVercel(customDomain.domain, vercelProjectName, vercelToken);
-        vercelConfigured = vercelResult.success;
-        vercelError = vercelResult.error || null;
-        
-        // If domain was added, check the actual SSL/verification status
-        if (vercelConfigured && vercelResult.projectId) {
-          console.log(`🔍 Checking real SSL status from Vercel...`);
-          const domainStatus = await checkVercelDomainStatus(customDomain.domain, vercelResult.projectId, vercelToken);
-          
-          sslReady = domainStatus.sslReady;
-          vercelVerification = domainStatus.verification;
-          
-          if (domainStatus.verified) {
-            console.log(`✅ Vercel confirms domain is verified - SSL is active`);
-          } else if (domainStatus.verification) {
-            console.log(`⚠️ Vercel requires additional verification:`, domainStatus.verification);
-          }
+        if (sslReady) {
+          message = '🎉 Domaine vérifié et HTTPS actif ! Votre site est en ligne.';
+        } else if (verified) {
+          message = '✅ Domaine vérifié, SSL en cours de provisionnement...';
+        } else if (vercelVerification?.length) {
+          message = '⚠️ Vercel nécessite une vérification TXT supplémentaire pour le SSL.';
+        } else if (vercelStatus.misconfigured) {
+          message = 'DNS détecté mais mal configuré. Vérifiez vos enregistrements.';
         }
         
+        // Log result
         await supabaseAdmin.from('deployment_logs').insert({
           deployment_id: deploymentId,
-          level: vercelConfigured ? (sslReady ? 'success' : 'info') : 'warning',
-          message: vercelConfigured 
-            ? (sslReady 
-                ? `Domain ${customDomain.domain} fully verified with SSL active` 
-                : `Domain ${customDomain.domain} added to Vercel - awaiting SSL provisioning`)
-            : `Vercel domain config: ${vercelError}`,
+          level: sslReady ? 'success' : verified ? 'info' : 'warning',
+          message: `DNS check: verified=${verified}, sslReady=${sslReady}`,
+          metadata: { 
+            dnsStatus, 
+            vercelVerified: verified,
+            sslReady,
+            hasVercelVerification: !!vercelVerification?.length
+          }
         });
       }
+    } else {
+      // No Vercel token - just check if DNS points to Vercel
+      verified = dnsStatus.aRecord.found || dnsStatus.cnameRecord.found;
+      if (verified) {
+        message = 'DNS configuré, vérification en cours...';
+      }
+    }
 
-      // Update custom_domains with REAL SSL status
-      await supabaseAdmin
-        .from('custom_domains')
-        .update({
-          verification_status: sslReady ? 'verified' : 'verifying',
-          dns_configured: true,
-          ssl_provisioned: sslReady
-        })
-        .eq('id', customDomain.id);
+    // Update database
+    await supabaseAdmin
+      .from('custom_domains')
+      .update({
+        verification_status: sslReady ? 'verified' : verified ? 'verifying' : 'pending',
+        dns_configured: dnsStatus.aRecord.found || dnsStatus.cnameRecord.found,
+        ssl_provisioned: sslReady
+      })
+      .eq('id', customDomain.id);
 
-      // Update deployment
+    if (sslReady) {
       await supabaseAdmin
         .from('deployments')
         .update({
-          status: sslReady ? 'deployed' : 'pending',
-          deployment_url: `https://${customDomain.domain}`,
-          ssl_status: sslReady ? 'active' : 'pending'
+          status: 'deployed',
+          deployment_url: `https://${domain}`,
+          ssl_status: 'active'
         })
         .eq('id', deploymentId);
-
-      await supabaseAdmin.from('deployment_logs').insert({
-        deployment_id: deploymentId,
-        level: sslReady ? 'success' : 'info',
-        message: sslReady 
-          ? `Domain ${customDomain.domain} verified with HTTPS active`
-          : `Domain ${customDomain.domain} DNS verified, SSL pending`,
-      });
-
-      // Build response with verification instructions if needed
-      const response: Record<string, unknown> = {
-        success: true,
-        verified: true,
-        vercelConfigured,
-        sslReady,
-        details: dnsCheckResult.details,
-        message: sslReady 
-          ? '🎉 Domaine vérifié et HTTPS actif ! Votre site est en ligne.'
-          : vercelVerification 
-            ? '⚠️ Vercel nécessite une vérification supplémentaire pour le SSL.'
-            : 'DNS vérifié ! SSL en cours de provisionnement (peut prendre quelques minutes)...'
-      };
-
-      // Include Vercel verification instructions if SSL not ready
-      if (vercelVerification && vercelVerification.length > 0) {
-        response.vercelVerification = vercelVerification;
-        response.vercelVerificationInstructions = 
-          `Ajoutez un enregistrement ${vercelVerification[0].type} pour "${vercelVerification[0].domain}" avec la valeur "${vercelVerification[0].value}"`;
-      }
-
-      return new Response(
-        JSON.stringify(response),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    } else {
-      await supabaseAdmin.from('deployment_logs').insert({
-        deployment_id: deploymentId,
-        level: 'warning',
-        message: `DNS verification pending for ${customDomain.domain}`,
-        metadata: {
-          aRecord: dnsCheckResult.details.aRecord.found,
-          cnameRecord: dnsCheckResult.details.cnameRecord.found,
-          txtRecord: dnsCheckResult.details.txtRecord.found
-        }
-      });
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          verified: false,
-          details: dnsCheckResult.details,
-          message: 'DNS non configuré. Vérifiez vos enregistrements DNS.'
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
     }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        verified,
+        sslReady,
+        details: {
+          aRecord: { 
+            found: dnsStatus.aRecord.found, 
+            value: dnsStatus.aRecord.value, 
+            expected: 'Vercel IP (76.76.x.x or 216.198.x.x)' 
+          },
+          cnameRecord: { 
+            found: dnsStatus.cnameRecord.found, 
+            value: dnsStatus.cnameRecord.value, 
+            expected: '*.vercel-dns.com' 
+          },
+        },
+        vercelVerification,
+        message
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
 
   } catch (error: unknown) {
     console.error('Check DNS error:', error);
