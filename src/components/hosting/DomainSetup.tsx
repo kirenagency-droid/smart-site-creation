@@ -39,6 +39,12 @@ interface DnsStatus {
   txtRecord: { found: boolean; value: string | null; expected: string };
 }
 
+interface VercelVerification {
+  type: string;
+  domain: string;
+  value: string;
+}
+
 // Helper to clean domain input
 const cleanDomain = (input: string): string => {
   return input
@@ -69,8 +75,8 @@ export const DomainSetup = ({ projectId, onClose }: DomainSetupProps) => {
   const [preCheckResult, setPreCheckResult] = useState<PreCheckResult | null>(null);
   const [dnsStatus, setDnsStatus] = useState<DnsStatus | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
-
-  // Pre-check domain before configuration
+  const [vercelVerification, setVercelVerification] = useState<VercelVerification[] | null>(null);
+  const [sslReady, setSslReady] = useState(false);
   const handlePreCheck = useCallback(async () => {
     const cleaned = cleanDomain(domain);
     if (!cleaned) {
@@ -140,16 +146,41 @@ export const DomainSetup = ({ projectId, onClose }: DomainSetupProps) => {
       
       // Update DNS status from verification result
       if (result && typeof result === 'object') {
-        const dnsResult = result as { verified?: boolean; details?: DnsStatus };
+        const dnsResult = result as { 
+          verified?: boolean; 
+          details?: DnsStatus;
+          sslReady?: boolean;
+          vercelVerification?: VercelVerification[];
+          vercelVerificationInstructions?: string;
+          message?: string;
+        };
         
         if (dnsResult.details) {
           setDnsStatus(dnsResult.details);
         }
         
-        if (dnsResult.verified) {
+        // Handle SSL status
+        if (dnsResult.sslReady !== undefined) {
+          setSslReady(dnsResult.sslReady);
+        }
+        
+        // Handle Vercel verification requirements
+        if (dnsResult.vercelVerification) {
+          setVercelVerification(dnsResult.vercelVerification);
+        } else {
+          setVercelVerification(null);
+        }
+        
+        if (dnsResult.verified && dnsResult.sslReady) {
           await publishToCustomDomain(domain);
           setAutoRefresh(false); // Stop auto-refresh on success
-          toast.success('Domaine vérifié et site publié !');
+          toast.success('Domaine vérifié et HTTPS actif !');
+        } else if (dnsResult.verified && !dnsResult.sslReady) {
+          if (dnsResult.vercelVerification) {
+            toast.warning('Vercel nécessite une vérification supplémentaire');
+          } else {
+            toast.info('DNS vérifié, SSL en cours de provisionnement...');
+          }
         }
       }
     } finally {
@@ -386,6 +417,73 @@ export const DomainSetup = ({ projectId, onClose }: DomainSetupProps) => {
                     {renderDnsStatusRow('A Record (@)', dnsStatus.aRecord, 'A')}
                     {renderDnsStatusRow('CNAME (www)', dnsStatus.cnameRecord, 'CNAME')}
                     {renderDnsStatusRow('TXT (vérification)', dnsStatus.txtRecord, 'TXT')}
+                  </div>
+                </div>
+              )}
+
+              {/* Vercel Verification Required */}
+              {vercelVerification && vercelVerification.length > 0 && !sslReady && (
+                <div className="p-4 rounded-xl border border-orange-500/30 bg-orange-500/10">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertCircle className="w-5 h-5 text-orange-500" />
+                    <span className="font-semibold text-orange-600 dark:text-orange-400">
+                      Vérification Vercel requise pour SSL
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Vercel nécessite un enregistrement DNS supplémentaire pour provisionner le certificat SSL.
+                  </p>
+                  <div className="space-y-3">
+                    {vercelVerification.map((v, i) => (
+                      <div key={i} className="p-3 rounded-lg bg-background border border-border/50">
+                        <div className="flex items-center justify-between mb-2">
+                          <Badge variant="outline" className="bg-orange-500/10 text-orange-600">
+                            {v.type}
+                          </Badge>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => copyToClipboard(v.value, `vercel-${i}`)}
+                            className="h-7"
+                          >
+                            {copiedRecord === `vercel-${i}` ? (
+                              <CheckCircle className="w-3 h-3 text-green-500" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 gap-2 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">Nom:</span>{' '}
+                            <code className="bg-muted px-1 rounded text-xs">{v.domain}</code>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Valeur:</span>{' '}
+                            <code className="bg-muted px-1 rounded text-xs break-all">{v.value}</code>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-3">
+                    Ajoutez cet enregistrement chez votre registrar, puis cliquez à nouveau sur "Vérifier".
+                  </p>
+                </div>
+              )}
+
+              {/* SSL Status */}
+              {dnsStatus?.aRecord?.found && (
+                <div className={`p-3 rounded-lg border ${sslReady ? 'border-green-500/30 bg-green-500/10' : 'border-yellow-500/30 bg-yellow-500/10'}`}>
+                  <div className="flex items-center gap-2">
+                    {sslReady ? (
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4 text-yellow-500 animate-spin" />
+                    )}
+                    <span className="text-sm font-medium">
+                      {sslReady ? 'HTTPS actif ✓' : 'Certificat SSL en cours de provisionnement...'}
+                    </span>
                   </div>
                 </div>
               )}
