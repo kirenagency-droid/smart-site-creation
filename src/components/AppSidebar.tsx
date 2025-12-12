@@ -108,12 +108,14 @@ export function AppSidebar() {
               <span className="font-bold text-lg text-foreground">Creali</span>
             )}
           </button>
-          <button 
-            onClick={toggleSidebar}
-            className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground rounded-lg hover:bg-secondary/50 transition-all duration-200"
-          >
-            <PanelLeft className="w-4 h-4" />
-          </button>
+          {!collapsed && (
+            <button 
+              onClick={toggleSidebar}
+              className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground rounded-lg hover:bg-secondary/50 transition-all duration-200"
+            >
+              <PanelLeft className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* User Dropdown */}
