@@ -97,14 +97,17 @@ export function AppSidebar() {
       <SidebarHeader className="p-4">
         {/* Logo */}
         <div className="flex items-center justify-between mb-5">
-          <Link to="/" className="flex items-center gap-2.5 group">
+          <button 
+            onClick={toggleSidebar}
+            className="flex items-center gap-2.5 group cursor-pointer"
+          >
             <div className="w-9 h-9 rounded-xl bg-gradient-primary flex items-center justify-center shadow-soft group-hover:shadow-glow transition-shadow duration-300">
               <Sparkles className="w-5 h-5 text-primary-foreground" />
             </div>
             {!collapsed && (
               <span className="font-bold text-lg text-foreground">Creali</span>
             )}
-          </Link>
+          </button>
           <button 
             onClick={toggleSidebar}
             className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground rounded-lg hover:bg-secondary/50 transition-all duration-200"
