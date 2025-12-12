@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUp, Paperclip, Sparkles, Zap, Globe, Palette, Code2, Rocket, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -46,6 +46,16 @@ const particles = Array.from({ length: 20 }, (_, i) => ({
   opacity: Math.random() * 0.5 + 0.1,
 }));
 
+// Typewriter placeholder phrases
+const placeholderPhrases = [
+  "A modern landing page for a fitness app...",
+  "Portfolio website for a photographer...",
+  "E-commerce store for handmade jewelry...",
+  "SaaS dashboard with dark theme...",
+  "Restaurant website with online booking...",
+  "Personal blog with minimal design...",
+];
+
 // Extract a meaningful project name from the prompt
 const extractProjectName = (prompt: string): string => {
   const lowerPrompt = prompt.toLowerCase();
@@ -92,6 +102,38 @@ const extractProjectName = (prompt: string): string => {
   return "Nouveau projet";
 };
 
+// Custom hook for typewriter effect
+const useTypewriter = (phrases: string[], typingSpeed = 50, deletingSpeed = 30, pauseDuration = 2000) => {
+  const [displayText, setDisplayText] = useState("");
+  const [phraseIndex, setPhraseIndex] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    const currentPhrase = phrases[phraseIndex];
+    
+    const timeout = setTimeout(() => {
+      if (!isDeleting) {
+        if (displayText.length < currentPhrase.length) {
+          setDisplayText(currentPhrase.slice(0, displayText.length + 1));
+        } else {
+          setTimeout(() => setIsDeleting(true), pauseDuration);
+        }
+      } else {
+        if (displayText.length > 0) {
+          setDisplayText(displayText.slice(0, -1));
+        } else {
+          setIsDeleting(false);
+          setPhraseIndex((prev) => (prev + 1) % phrases.length);
+        }
+      }
+    }, isDeleting ? deletingSpeed : typingSpeed);
+
+    return () => clearTimeout(timeout);
+  }, [displayText, isDeleting, phraseIndex, phrases, typingSpeed, deletingSpeed, pauseDuration]);
+
+  return displayText;
+};
+
 const HeroSection = () => {
   const [prompt, setPrompt] = useState("");
   const [isFocused, setIsFocused] = useState(false);
@@ -100,6 +142,8 @@ const HeroSection = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { themeColor } = useTheme();
+  
+  const animatedPlaceholder = useTypewriter(placeholderPhrases, 60, 40, 1500);
 
   useEffect(() => {
     setMounted(true);
@@ -270,8 +314,8 @@ const HeroSection = () => {
                   }
                 }
               }}
-              placeholder="Describe your website... e.g., A modern landing page for a fitness app with dark theme"
-              className="w-full bg-transparent border-0 px-6 pt-5 pb-2 text-foreground placeholder:text-muted-foreground/60 focus:outline-none text-base resize-none min-h-[80px] transition-all"
+              placeholder={animatedPlaceholder}
+              className="w-full bg-transparent border-0 px-6 pt-5 pb-2 text-foreground placeholder:text-muted-foreground/50 focus:outline-none text-base resize-none min-h-[80px] transition-all"
               rows={2}
               disabled={isCreating}
             />
